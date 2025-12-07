@@ -989,9 +989,105 @@ where $A_\lambda$ is the influence matrix mapping data to predictions.
 In practice for photometric stereo, a reasonable starting point is $\lambda \approx 10^{-4}$ to $10^{-2}$, adjusted visually based on the smoothness of the reconstructed surface.
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of Chapter 3: Numerical Methods
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER 4: IMPLEMENTATION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{Implementation}
+
+This chapter presents the algorithmic implementation of the photometric stereo pipeline. We focus on the computational steps required to go from raw images to a reconstructed 3D surface, emphasizing the data flow and key algorithmic decisions at each stage. The implementation integrates the mathematical foundations from Chapter 2 with the numerical solvers from Chapter 3.
+
+\subsection{Photometric Stereo Pipeline}
+
+The complete pipeline consists of four stages: image acquisition and preprocessing, light matrix construction, per-pixel normal estimation, and gradient field computation. Algorithm~\ref{alg:pipeline} provides an overview.
+
+\begin{algorithm}[H]
+\caption{Photometric Stereo Pipeline}
+\label{alg:pipeline}
+\begin{algorithmic}[1]
+\Require Images $\{I_1, \ldots, I_K\}$ under known lighting $\{\mathbf{l}_1, \ldots, \mathbf{l}_K\}$
+\Ensure Reconstructed height field $z(x,y)$
+\State Preprocess images: normalization, background subtraction
+\State Construct light matrix $L \in \mathbb{R}^{K \times 3}$
+\State \textbf{for} each pixel $(x,y)$ \textbf{do}
+\State \quad Solve $L \mathbf{n} = \mathbf{i}$ for surface normal $\mathbf{n}(x,y)$
+\State \textbf{end for}
+\State Compute gradients: $p = -n_x/n_z$, $q = -n_y/n_z$
+\State Compute divergence: $f = \partial_x p + \partial_y q$
+\State Solve Poisson equation: $\nabla^2 z = f$
+\State \Return $z$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Image Acquisition and Preprocessing}
+
+The input consists of $K$ grayscale images of a static scene, each captured under a different known lighting direction. For reliable normal estimation, we require $K \geq 3$ non-coplanar light sources, though $K = 4$ to $8$ provides better noise robustness.
+
+Several preprocessing steps are essential for high-quality reconstruction. First, intensity normalization converts raw pixel values to the range $[0, 1]$ and applies gamma correction if the camera response is nonlinear. Second, background subtraction removes ambient illumination by subtracting an image captured with all lights off, or by estimating a low-frequency background model. Third, shadow detection identifies pixels where the surface is in shadow (intensity below a threshold); these measurements violate the Lambertian model and should be excluded from the least-squares fit. Finally, saturation handling excludes pixels at maximum intensity, as they provide no gradient information.
+
+For each pixel location $(x,y)$, we collect the intensity vector:
+\begin{equation}
+\mathbf{i}(x,y) = [I_1(x,y), I_2(x,y), \ldots, I_K(x,y)]^T
+\end{equation}
+
+
+\subsubsection{Light Matrix Construction}
+
+The lighting directions must be known or calibrated. Each light direction $\mathbf{l}_k = (\ell_{k,x}, \ell_{k,y}, \ell_{k,z})^T$ is a unit vector pointing from the surface toward the light source. These are assembled into the light matrix:
+\begin{equation}
+L = \begin{bmatrix}
+\ell_{1,x} & \ell_{1,y} & \ell_{1,z} \\
+\ell_{2,x} & \ell_{2,y} & \ell_{2,z} \\
+\vdots & \vdots & \vdots \\
+\ell_{K,x} & \ell_{K,y} & \ell_{K,z}
+\end{bmatrix} \in \mathbb{R}^{K \times 3}
+\end{equation}
+
+For well-conditioned normal estimation, the light directions should span 3D space. The condition number $\kappa(L^T L)$ indicates sensitivity to noise---lower is better. Optimal configurations distribute lights uniformly over the hemisphere, avoiding coplanar arrangements.
+
+Common calibration methods include using a reference sphere with known geometry (the ``chrome ball'' technique) or directly measuring light positions with a goniometer.
+
+\subsubsection{Per-Pixel Normal Estimation}
+
+At each pixel, we solve the overdetermined system $L \mathbf{n} = \mathbf{i}$ for the surface normal $\mathbf{n}$. The Lambertian model gives:
+\begin{equation}
+I_k(x,y) = \rho(x,y) \cdot \mathbf{l}_k \cdot \mathbf{n}(x,y)
+\end{equation}
+where $\rho$ is the albedo (reflectivity) at that pixel. We solve for the product $\mathbf{m} = \rho \mathbf{n}$ using least squares:
+\begin{equation}
+\mathbf{m}^* = (L^T L)^{-1} L^T \mathbf{i} = L^\dagger \mathbf{i}
+\end{equation}
+where $L^\dagger$ is the Moore-Penrose pseudoinverse. The albedo and normal are then separated:
+\begin{equation}
+\rho = \|\mathbf{m}^*\|, \quad \mathbf{n} = \frac{\mathbf{m}^*}{\|\mathbf{m}^*\|}
+\end{equation}
+
+For pixels with shadows or specular highlights, robust estimation methods (e.g., RANSAC or iteratively reweighted least squares) can improve results by down-weighting outlier measurements.
+
+\subsubsection{Gradient Field Computation}
+
+Given the surface normal $\mathbf{n} = (n_x, n_y, n_z)^T$ at each pixel, we extract the surface gradients. Under the assumption that $z = z(x,y)$ is a height field, the normal vector is:
+\begin{equation}
+\mathbf{n} = \frac{1}{\sqrt{1 + p^2 + q^2}} \begin{pmatrix} -p \\ -q \\ 1 \end{pmatrix}
+\end{equation}
+where $p = \partial z / \partial x$ and $q = \partial z / \partial y$. Rearranging:
+\begin{equation}
+p = -\frac{n_x}{n_z}, \quad q = -\frac{n_y}{n_z}
+\end{equation}
+
+This conversion requires $n_z > 0$ (surface visible from above). Pixels where $n_z \leq 0$ correspond to overhanging surfaces or self-occlusion and cannot be reconstructed as a height field.
+
+The gradient fields $(p, q)$ are then passed to the Poisson solvers from Chapter 3. The divergence is computed using central differences:
+\begin{equation}
+f_{i,j} = \frac{p_{i+1,j} - p_{i-1,j}}{2h} + \frac{q_{i,j+1} - q_{i,j-1}}{2h}
+\end{equation}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of Chapter 3: Numerical Methods
+% PLACEHOLDER: Section 4.2 - Surface Reconstruction Pipeline
 
 \end{document}

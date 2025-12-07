@@ -743,6 +743,7 @@ The complete FFT solver procedure is shown in Algorithm~\ref{alg:fft_solver}. Th
 \end{algorithm}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 \subsection{Solver 2: Finite Difference (Dirichlet Boundaries)}
 
 The finite difference solver with Dirichlet boundary conditions constructs and solves the sparse linear system $A\mathbf{z} = \mathbf{f}$ derived in Section 3.1. Unlike the FFT approach, this method uses iterative linear algebra solvers that exploit the matrix sparsity, making it less efficient but more flexible in handling boundary conditions.
@@ -843,9 +844,107 @@ The complete finite difference Dirichlet solver is shown in Algorithm~\ref{alg:f
 \end{algorithmic}
 \end{algorithm}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\subsection{Solver 3: Finite Difference (Neumann Boundaries)}
+
+The Neumann solver handles problems where boundary derivatives, rather than values, are specified. This is often more physically realistic for photometric stereo, where we typically have no information about the absolute height at image boundaries---only the surface gradients.
+
+\subsubsection{Mathematical Approach}
+
+As with the Dirichlet solver, we discretize using the 5-point stencil and solve the resulting sparse system with Conjugate Gradient. The key difference lies in how boundary points are handled: instead of prescribing $z = g$ at boundaries, we prescribe the normal derivative $\partial z / \partial n = h$.
+
+For homogeneous Neumann conditions ($h = 0$), the surface gradient perpendicular to the boundary is zero---the surface approaches the boundary ``flat." This is enforced by using one-sided differences at boundary points or by introducing ghost points outside the domain that mirror interior values.
+
+A crucial distinction from the Dirichlet case is that Neumann problems with homogeneous conditions determine the solution only up to an additive constant. The compatibility condition (Section 2.3) requires:
+\begin{equation}
+\iint_\Omega f \, dA = 0
+\end{equation}
+If the source term $f$ does not integrate to zero, we subtract its mean before solving. After obtaining the solution, we typically enforce zero mean to fix the arbitrary constant.
+
+\subsubsection{Boundary Condition: Zero Flux}
+
+Zero-flux (homogeneous Neumann) conditions prescribe:
+\begin{equation}
+\frac{\partial z}{\partial n}\bigg|_{\partial\Omega} = 0
+\end{equation}
+This means the surface has zero slope perpendicular to the boundary. For photometric stereo, this is appropriate when we have no prior knowledge about boundary heights and want the solution to extend naturally beyond the image frame.
+Using the ghost point $z_{-1,j} = z_{1,j}$ (mirroring across the boundary), the stencil at a left boundary point becomes:
+\begin{equation}
+\frac{z_{1,j} + z_{-1,j} + z_{0,j+1} + z_{0,j-1} - 4z_{0,j}}{h^2} = \frac{2z_{1,j} + z_{0,j+1} + z_{0,j-1} - 4z_{0,j}}{h^2} = f_{0,j}
+\end{equation}
+The coefficient on the interior neighbor doubles, effectively reflecting the gradient condition.
+
+\subsubsection{Algorithm Steps}
+
+The complete finite difference Neumann solver is shown in Algorithm~\ref{alg:fd_neumann}. The key differences from the Dirichlet solver are: (1) enforcing compatibility by subtracting the mean of $f$, (2) using the Neumann stencil at boundaries, and (3) centering the solution afterward. The computational cost remains $\mathcal{O}(N \cdot k)$.
+
+
+\begin{algorithm}[H]
+\caption{Finite Difference Poisson Solver (Neumann BC)}
+\label{alg:fd_neumann}
+\begin{algorithmic}[1]
+\Require Gradient estimates $(p, q)$ from photometric stereo
+\Ensure Height field $z$ with $\partial z/\partial n|_{\partial\Omega} = 0$
+\State Compute divergence: $f \gets \partial_x p + \partial_y q$
+\State Enforce compatibility: $f \gets f - \text{mean}(f)$
+\State Define operator $A: z \mapsto \nabla^2_h z$ with Neumann stencil at boundaries
+\State Initialize: $z_0 \gets 0$
+\State Solve: $\mathbf{z} \gets \text{CG}(A, \mathbf{f}, z_0, \text{tol})$
+\State Center solution: $z \gets z - \text{mean}(z)$
+\State \Return $z$
+\end{algorithmic}
+\end{algorithm}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\subsection{Regularization (Noise Handling)}
+
+Real photometric stereo data contains noise from sensor limitations, lighting imperfections, and violations of the Lambertian assumption. This noise propagates through the gradient estimation and into the Poisson problem, where it can cause severe artifacts in the reconstructed surface. Regularization techniques address this by penalizing solutions that fit noise too closely.
+
+\subsubsection{Why Regularization is Needed}
+
+The Poisson equation solvers developed above find the exact solution to $\nabla^2 z = f$. However, when $f$ is contaminated with noise, the ``exact'' solution faithfully reproduces that noise---often with amplification. Consider the frequency-domain solution:
+\begin{equation}
+\hat{Z}(\mathbf{k}) = \frac{\hat{F}(\mathbf{k})}{-|\mathbf{k}|^2}
+\end{equation}
+Low-frequency noise components (small $|\mathbf{k}|$) are divided by small eigenvalues, dramatically amplifying their contribution to the solution. A small amount of low-frequency noise in the gradient field can produce large-scale undulations in the reconstructed surface.
+
+This is a manifestation of the Poisson equation's ill-conditioning for noisy data. The problem is well-posed mathematically but numerically unstable: small perturbations in $f$ cause large perturbations in $z$. Regularization stabilizes the problem by trading exact data fitting for solution smoothness.
+
+\subsubsection{Tikhonov Derivation}
+
+Tikhonov regularization adds a penalty term to the objective function, preferring solutions with small norm:
+\begin{equation}
+z_\lambda = \arg\min_z \left\{ \|\nabla^2 z - f\|^2 + \lambda \|z\|^2 \right\}
+\end{equation}
+The first term ensures the solution approximately satisfies the Poisson equation; the second term penalizes large height values. The parameter $\lambda > 0$ controls the trade-off: larger $\lambda$ produces smoother but less accurate solutions.
+
+Taking the first variation and setting it to zero yields the regularized normal equations:
+\begin{equation}
+(\nabla^4 + \lambda I) z = \nabla^2 f
+\end{equation}
+In the frequency domain, this becomes:
+\begin{equation}
+\hat{Z}_\lambda(\mathbf{k}) = \frac{-|\mathbf{k}|^2 \hat{F}(\mathbf{k})}{|\mathbf{k}|^4 + \lambda}
+\end{equation}
+
+The regularization modifies the eigenvalue division: instead of dividing by $|\mathbf{k}|^2$, we effectively divide by $|\mathbf{k}|^2 + \lambda/|\mathbf{k}|^2$. This prevents blow-up at low frequencies while preserving high-frequency detail where eigenvalues are large. The regularized solution smoothly interpolates between no modification (high frequencies) and strong damping (low frequencies).
+
+\subsubsection{Choosing the Parameter}
+
+The regularization parameter $\lambda$ must balance bias against variance. Too small, and noise dominates; too large, and genuine surface features are smoothed away. Several methods exist for selecting $\lambda$:
+
+\textit{L-curve method.} Plot solution norm $\|z_\lambda\|$ versus residual norm $\|\nabla^2 z_\lambda - f\|$ for various $\lambda$. The optimal $\lambda$ lies at the ``corner'' of this L-shaped curve, balancing the two objectives. This method requires no knowledge of the noise level.
+
+\textit{Discrepancy principle.} If the noise standard deviation $\sigma$ is known, choose $\lambda$ such that the residual norm equals the expected noise level: $\|\nabla^2 z_\lambda - f\| \approx \sigma \sqrt{N}$. This ensures we fit the data to within noise tolerance without overfitting.
+
+\textit{Cross-validation.} Hold out a subset of measurements, fit to the remainder, and evaluate prediction error on the held-out set. The $\lambda$ minimizing prediction error generalizes best.
+
+In practice for photometric stereo, a reasonable starting point is $\lambda \approx 10^{-4}$ to $10^{-2}$, adjusted visually based on the smoothness of the reconstructed surface.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PLACEHOLDER: Section 3.4 - Finite Difference Neumann Solver
+% End of Chapter 3: Numerical Methods
 
 \end{document}

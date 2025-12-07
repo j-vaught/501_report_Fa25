@@ -1,7 +1,7 @@
 \documentclass[11pt]{article}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
 \usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{gensymb} % For proper degree symbol in math mode
 \usepackage{graphicx}
 \setlength{\headheight}{13.6pt} % Fix header height warning
@@ -686,8 +686,65 @@ Each row corresponds to one grid point. The diagonal entry is $-4$ (center weigh
 
 Boundary conditions modify the right-hand side $\mathbf{f}$ or the matrix structure itself. For Dirichlet conditions, known boundary values move to the right-hand side. For Neumann conditions, stencil weights at boundaries are adjusted to enforce derivative constraints. The specific modifications are detailed in the solver sections that follow.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Solver 1: FFT-Based (Spectral Method)}
+
+The FFT-based solver exploits the fact that the Laplacian operator is diagonalized in the Fourier domain. This transforms the Poisson PDE into simple algebraic division, enabling $\mathcal{O}(N \log N)$ solution complexity. This is our fastest solver and the default choice when periodic boundary conditions are acceptable.
+
+\subsubsection{Mathematical Approach}
+
+The key insight is that Fourier basis functions (complex exponentials) are eigenfunctions of the Laplacian. Applying the Fourier transform to both sides of $\nabla^2 z = f$:
+\begin{equation}
+\mathcal{F}\{\nabla^2 z\} = \mathcal{F}\{f\}
+\end{equation}
+The Laplacian in the frequency domain becomes multiplication by eigenvalues. Let $\hat{Z}(\mathbf{k})$ and $\hat{F}(\mathbf{k})$ denote the Fourier transforms of $z$ and $f$ at frequency $\mathbf{k} = (k_x, k_y)$:
+\begin{equation}
+-|\mathbf{k}|^2 \hat{Z}(\mathbf{k}) = \hat{F}(\mathbf{k})
+\end{equation}
+where $|\mathbf{k}|^2 = k_x^2 + k_y^2$ is the squared frequency magnitude. Solving for the solution in frequency space:
+\begin{equation}
+\hat{Z}(\mathbf{k}) = \frac{\hat{F}(\mathbf{k})}{-|\mathbf{k}|^2}
+\end{equation}
+The solution is obtained by inverse Fourier transform:
+\begin{equation}
+z(x,y) = \mathcal{F}^{-1}\left\{\frac{\hat{F}(\mathbf{k})}{-|\mathbf{k}|^2}\right\}
+\end{equation}
+This converts the PDE (which requires solving a large linear system) into three simple operations: forward FFT, element-wise division, and inverse FFT.
+
+\subsubsection{Boundary Condition: Periodic}
+
+The FFT inherently assumes that the signal is periodic in all directions. This means the solver implicitly enforces:
+\begin{equation}
+z(0, y) = z(L_x, y), \quad z(x, 0) = z(x, L_y), \quad \text{and similarly for all derivatives}
+\end{equation}
+Periodic boundary conditions are rarely physical for real surfaces---few objects wrap around seamlessly at their edges. However, they work well when the object of interest is centered in the image with gradients decaying to near-zero at the boundaries.
+
+A critical issue arises at the DC component ($\mathbf{k} = (0,0)$): the eigenvalue $|\mathbf{k}|^2 = 0$, creating a division by zero. This corresponds to the compatibility condition from Section 2.3---periodic problems determine the solution only up to an additive constant. We handle this by setting $\hat{F}[0,0] = 0$ to enforce zero-mean source (compatibility), setting the eigenvalue $\lambda[0,0] = 1$ to avoid division by zero, and the resulting $\hat{Z}[0,0] = 0$ gives a zero-mean solution.
+
+\subsubsection{Algorithm Steps}
+
+The complete FFT solver procedure is shown in Algorithm~\ref{alg:fft_solver}. The algorithm requires only two FFT operations (steps 2 and 6), each with $\mathcal{O}(N \log N)$ complexity, making this solver extremely fast for typical image sizes.
+
+\begin{algorithm}[H]
+\caption{FFT-Based Poisson Solver}
+\label{alg:fft_solver}
+\begin{algorithmic}[1]
+\Require Gradient estimates $(p, q)$ from photometric stereo
+\Ensure Height field $z$
+\State Compute divergence: $f \gets \partial_x p + \partial_y q$
+\State $\hat{F} \gets \text{FFT2D}(f)$
+\State Construct eigenvalues: $\lambda_{k_x,k_y} \gets -4\pi^2(k_x^2/L_x^2 + k_y^2/L_y^2)$
+\State Handle DC component: $\lambda[0,0] \gets 1$; $\hat{F}[0,0] \gets 0$
+\State $\hat{Z} \gets \hat{F} / \lambda$
+\State $z \gets \text{IFFT2D}(\hat{Z})$
+\State $z \gets \text{Re}(z)$
+\State \Return $z$
+\end{algorithmic}
+\end{algorithm}
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PLACEHOLDER: Section 3.2 - FFT-Based Solver
+% PLACEHOLDER: Section 3.3 - Finite Difference Dirichlet Solver
 
 \end{document}

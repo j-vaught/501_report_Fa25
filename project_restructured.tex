@@ -1086,8 +1086,158 @@ The gradient fields $(p, q)$ are then passed to the Poisson solvers from Chapter
 f_{i,j} = \frac{p_{i+1,j} - p_{i-1,j}}{2h} + \frac{q_{i,j+1} - q_{i,j-1}}{2h}
 \end{equation}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Poisson Solver Integration}
+
+Once the gradient fields $(p, q)$ are computed from the surface normals, the next stage integrates these gradients to recover the height field $z(x,y)$. This involves constructing the divergence field, selecting an appropriate Poisson solver based on boundary conditions, and post-processing the result.
+
+\subsubsection{Divergence Field Construction}
+
+The Poisson equation $\nabla^2 z = f$ requires the right-hand side $f$ to be the divergence of the gradient field. Using central differences on a grid with spacing $h$:
+\begin{equation}
+f_{i,j} = \frac{\partial p}{\partial x}\bigg|_{i,j} + \frac{\partial q}{\partial y}\bigg|_{i,j} \approx \frac{p_{i+1,j} - p_{i-1,j}}{2h} + \frac{q_{i,j+1} - q_{i,j-1}}{2h}
+\end{equation}
+
+At boundary pixels, one-sided differences are used. For the left boundary ($i = 0$):
+\begin{equation}
+\frac{\partial p}{\partial x}\bigg|_{0,j} \approx \frac{p_{1,j} - p_{0,j}}{h}
+\end{equation}
+and similarly for other edges and corners. The divergence computation can be implemented efficiently using convolution with appropriate finite difference kernels.
+
+Missing or invalid pixels (shadows, specular highlights, or regions where $n_z \leq 0$) are marked in a validity mask. The Poisson solver can either interpolate over these regions or treat them as internal Dirichlet constraints.
+
+\subsubsection{Solver Selection Logic}
+
+The choice of Poisson solver depends on the desired boundary conditions and computational constraints. Algorithm~\ref{alg:solver_select} summarizes the selection logic.
+
+\begin{algorithm}[H]
+\caption{Poisson Solver Selection}
+\label{alg:solver_select}
+\begin{algorithmic}[1]
+\Require Divergence field $f$, boundary condition type, regularization parameter $\lambda$
+\Ensure Height field $z$
+\If{boundary\_type = PERIODIC}
+    \State $z \gets \text{FFT\_Solver}(f)$ \Comment{$\mathcal{O}(N \log N)$}
+\ElsIf{boundary\_type = DIRICHLET}
+    \State $z \gets \text{FD\_Dirichlet\_Solver}(f, g)$ \Comment{CG on interior}
+\ElsIf{boundary\_type = NEUMANN}
+    \State $f \gets f - \text{mean}(f)$ \Comment{Enforce compatibility}
+    \State $z \gets \text{FD\_Neumann\_Solver}(f)$ \Comment{CG with modified stencil}
+\EndIf
+\If{$\lambda > 0$}
+    \State Apply Tikhonov regularization during solve
+\EndIf
+\State \Return $z$
+\end{algorithmic}
+\end{algorithm}
+
+For most photometric stereo applications, the FFT solver provides the best balance of speed and accuracy when the object is centered in the image with gradients decaying near the boundaries. When exact boundary control is needed (e.g., object on a known flat plane), the Dirichlet solver is preferred. The Neumann solver is appropriate when boundary heights are unknown but should vary smoothly.
+
+\subsubsection{Post-Processing (Mean Centering)}
+
+The recovered height field $z$ is determined only up to an additive constant for both periodic and Neumann boundary conditions. We fix this ambiguity by enforcing zero mean:
+\begin{equation}
+z_{\text{centered}} = z - \frac{1}{N} \sum_{i,j} z_{i,j}
+\end{equation}
+where $N$ is the total number of valid pixels. This centers the surface around the $z = 0$ plane.
+
+Additional post-processing steps may include median filtering to remove isolated spike artifacts, clipping extreme values that arise from noisy gradient estimates, or applying a low-pass filter to smooth high-frequency reconstruction noise. For visualization, the height field is typically scaled to a convenient range and rendered as a 3D mesh or depth map.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PLACEHOLDER: Section 4.2 - Surface Reconstruction Pipeline
+\newpage
+\subsection{Software Architecture Overview}
+
+\textbf{[STUB SECTION --- TO BE REWRITTEN]}
+
+This section provides an overview of the software architecture for both Python and MATLAB implementations. The modular design separates concerns into distinct components for image processing, normal estimation, and surface reconstruction.
+
+\subsubsection{Python Implementation Structure}
+
+\textbf{[PLACEHOLDER --- CONTENT TO BE REPLACED]}
+
+The Python implementation follows a modular architecture organized into the following components. Figure~\ref{fig:python_arch_stub} shows a placeholder diagram.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.5cm, auto,
+    block/.style={rectangle, draw, fill=gray!20, text width=6em, text centered, minimum height=3em},
+    arrow/.style={->, thick}]
+    
+    \node[block] (input) {Input Module};
+    \node[block, right of=input, xshift=2cm] (process) {Processing Module};
+    \node[block, right of=process, xshift=2cm] (output) {Output Module};
+    
+    \draw[arrow] (input) -- (process);
+    \draw[arrow] (process) -- (output);
+    
+    \node[below of=process, yshift=-0.5cm, text=red] {\textbf{[PLACEHOLDER DIAGRAM]}};
+\end{tikzpicture}
+\caption{Python module architecture (STUB --- to be replaced with actual implementation details).}
+\label{fig:python_arch_stub}
+\end{figure}
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+
+\subsubsection{MATLAB Implementation Structure}
+
+\textbf{[PLACEHOLDER --- CONTENT TO BE REPLACED]}
+
+The MATLAB implementation provides a reference implementation with similar functionality. Figure~\ref{fig:matlab_arch_stub} shows the placeholder architecture.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.2cm, auto,
+    block/.style={rectangle, draw, fill=gray!20, text width=5em, text centered, minimum height=2.5em},
+    arrow/.style={->, thick}]
+    
+    \node[block] (main) {main.m};
+    \node[block, below left of=main, xshift=-1.5cm] (ps) {ps\_solve.m};
+    \node[block, below of=main] (poisson) {poisson.m};
+    \node[block, below right of=main, xshift=1.5cm] (viz) {visualize.m};
+    
+    \draw[arrow] (main) -- (ps);
+    \draw[arrow] (main) -- (poisson);
+    \draw[arrow] (main) -- (viz);
+    
+    \node[below of=poisson, yshift=-0.3cm, text=red] {\textbf{[PLACEHOLDER DIAGRAM]}};
+\end{tikzpicture}
+\caption{MATLAB function hierarchy (STUB --- to be replaced with actual code structure).}
+\label{fig:matlab_arch_stub}
+\end{figure}
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.
+
+\subsubsection{Code Validation Strategy}
+
+\textbf{[PLACEHOLDER --- CONTENT TO BE REPLACED]}
+
+Validation of the implementation involves several strategies shown in Figure~\ref{fig:validation_stub}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.8cm, auto,
+    block/.style={rectangle, draw, fill=gray!20, text width=7em, text centered, minimum height=2.5em},
+    arrow/.style={->, thick}]
+    
+    \node[block] (synth) {Synthetic Tests};
+    \node[block, right of=synth, xshift=2.5cm] (unit) {Unit Tests};
+    \node[block, below of=synth] (compare) {Cross-Validation};
+    \node[block, below of=unit] (bench) {Benchmarks};
+    
+    \draw[arrow] (synth) -- (compare);
+    \draw[arrow] (unit) -- (bench);
+    \draw[arrow] (compare) -- (bench);
+    
+    \node[below of=compare, xshift=2cm, yshift=0.3cm, text=red] {\textbf{[PLACEHOLDER DIAGRAM]}};
+\end{tikzpicture}
+\caption{Validation workflow (STUB --- to be replaced with actual testing methodology).}
+\label{fig:validation_stub}
+\end{figure}
+
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of Chapter 4: Implementation
 
 \end{document}

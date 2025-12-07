@@ -403,7 +403,9 @@ where weights $w_i$ are set based on confidence (e.g., $w_i = \max(0, \mathbf{n}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Gradient Integration via Poisson Equation}
 
-Photometric stereo recovers surface normals, but our ultimate goal is a height map $z(x,y)$. The normals induce gradient estimates $(p,q) = (\partial z/\partial x, \partial z/\partial y)$, but real measurements are noisy and generally not integrable---the curl $\partial_y p - \partial_x q \neq 0$. This section develops the variational framework that projects noisy gradients onto the closest integrable field.
+We now have the normals $\mathbf{g}(x,y)$ from photometric stereo, but our ultimate goal is a height map $z(x,y)$. 
+The normals allow us to compute gradient estimates $(p,q) = (\partial z/\partial x, \partial z/\partial y)$, but real measurements are noisy and generally not integrable---the curl $\partial_y p - \partial_x q \neq 0$. 
+This section develops the variational framework that projects noisy gradients onto the closest integrable field.
 
 \subsubsection{Variational Formulation}
 
@@ -441,9 +443,57 @@ This is the Poisson equation:
 \end{equation}
 Here $\nabla^2 = \partial_x^2 + \partial_y^2$ is the Laplacian operator and $f(x,y)$ is the divergence of the measured gradient field. The Poisson equation~\eqref{eq:poisson} arises because an integrable vector field must be curl-free ($\partial_y \hat{p} - \partial_x \hat{q} = 0$). When the measured gradients violate this condition due to noise, solving the Poisson problem projects $(\hat{p}, \hat{q})$ onto the closest integrable field in the $L^2$ sense.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Boundary Condition Theory}
+
+The Poisson equation $\nabla^2 z = f$ admits a unique solution only when supplemented with boundary conditions on $\partial\Omega$. We consider three types that arise in surface reconstruction: Dirichlet, Neumann, and periodic conditions. 
+The choice of boundary conditions depends on the physical assumptions about the surface at the image boundary and impacts both solution uniqueness and numerical implementation.
+
+\subsubsection{Dirichlet Boundary Conditions}
+
+Dirichlet conditions prescribe the solution value on the boundary:
+\begin{equation}
+z(x,y) = g(x,y), \quad (x,y) \in \partial\Omega
+\end{equation}
+where $g$ is a given function. In the homogeneous case $g \equiv 0$, the surface is pinned to zero height along the entire boundary. This is appropriate when the reconstructed object is known to be flat at the image edges or when the object of interest is contained entirely within the interior of the domain.
+
+For photometric stereo, homogeneous Dirichlet conditions assume that the surface height is zero (or a known constant) at the image boundary. This is suitable for objects that sit on a flat background plane or when the region of interest is masked to exclude edge artifacts. Dirichlet problems always have a unique solution given smooth data.
+
+\subsubsection{Neumann Boundary Conditions}
+
+Neumann conditions prescribe the normal derivative at the boundary:
+\begin{equation}
+\frac{\partial z}{\partial n}\bigg|_{\partial\Omega} = h(x,y), \quad (x,y) \in \partial\Omega
+\end{equation}
+where $\mathbf{n}$ is the outward unit normal to $\partial\Omega$ and $h$ specifies the boundary flux. The homogeneous case $h \equiv 0$ imposes zero normal derivative, meaning the surface approaches the boundary with zero slope in the perpendicular direction.
+
+Zero-flux Neumann conditions arise when we have no information about the surface beyond the image boundary. The natural continuation of the gradient field is to assume it stays flat, preventing artificial discontinuities. However, Neumann conditions leave the solution determined only up to an additive constant---we can recover the surface shape but not its absolute height. This lack of absolute height information is resolved by simply setting the average of the entire reconstructed depth profile to zero.
+
+\subsubsection{Periodic Boundary Conditions}
+
+Periodic conditions impose that the solution and its derivatives wrap around at opposite boundaries:
+\begin{equation}
+z(0, y) = z(L_x, y), \quad z(x, 0) = z(x, L_y), \quad \text{and similarly for derivatives}
+\end{equation}
+This condition arises naturally when using Fourier-based (FFT) solvers, which assume the domain tiles infinitely in all directions. Under periodicity, the Discrete Fourier Transform diagonalizes the Laplacian operator, enabling $\mathcal{O}(N \log N)$ solution complexity.
+
+Periodic conditions are rarely physical for real surfaces but are computationally convenient. They work well when the surface gradients decay to zero near the boundary (e.g., smooth objects centered in the image) but can introduce artifacts when the surface value or gradient differs significantly between opposite edges. In practice, we often accept these artifacts in exchange for FFT solver speed, especially when the object of interest is well-separated from the image boundary.
+
+\subsubsection{Compatibility and Uniqueness}
+
+For the Dirichlet problem on a bounded domain, a unique solution exists for any smooth right-hand side $f$ and boundary data $g$. For the Neumann problem, a compatibility condition must hold. Applying the divergence theorem:
+\begin{equation}
+\iint_\Omega \nabla^2 z \, dA = \oint_{\partial\Omega} \frac{\partial z}{\partial n} \, ds
+\end{equation}
+Substituting $\nabla^2 z = f$ and the Neumann condition:
+\begin{equation}
+\iint_\Omega f \, dA = \oint_{\partial\Omega} h \, ds
+\end{equation}
+When $h = 0$ (homogeneous Neumann), solvability requires $\iint_\Omega f \, dA = 0$, i.e., the source term must integrate to zero over the domain. Any additive constant $z + c$ is also a solution, so we pick the unique solution with zero mean. The same compatibility condition applies to periodic boundary conditions: the FFT solver enforces $\hat{F}[0,0] = 0$ to satisfy this constraint.
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PLACEHOLDER: Section 2.3 - Boundary Condition Theory
+% PLACEHOLDER: Section 2.4 - Analytical Solution: Separation of Variables
 
 \end{document}
 

@@ -1347,13 +1347,12 @@ This metric captures the cumulative effect of angular errors. High RMSE alongsid
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \subsection{Core Validation}\label{sec:core_validation}
 
-This section validates the two primary software components: the Poisson solver itself (using exact gradients) and the complete photometric stereo pipeline (using rendered images).
+This section validates the two primary software components: the Poisson solver and the complete photometric stereo pipeline. We proceed in a specific order to isolate sources of error. First, we validate the integrator using exact inputs (Validation 1) to establish the numerical error floor. Second, we test the full pipeline (Validation 2) to quantify the additional error introduced by photometric normal estimation. This decoupling ensures that fundamental integration artifacts are not mistaken for photometric inaccuracies.
 
 \subsubsection{Validation 1: Poisson Solver Validation (Gradient $\rightarrow$ Height)}
-
-We first isolate the integration step by bypassing the normal estimation entirely. Using the analytic Gaussian surface, we compute exact gradients $(p,q)$ analytically, differentiate them to form the divergence field $f$, and pass this directly to the FFT solver. This establishes the numerical floor of the method, separating integration error from photometric noise.
 
 \begin{center}
 \resizebox{0.9\linewidth}{!}{%
@@ -1376,47 +1375,11 @@ We first isolate the integration step by bypassing the normal estimation entirel
 }
 \end{center}
 
-Figure~\ref{fig:exp1_layout} confirms that the solver is functioning correctly. The reconstructed surface is visually indistinguishable from the ground truth, and the error histogram is tightly concentrated around zero. The small residual errors (RMSE $\approx 2.2 \times 10^{-2}$) arise primarily from the periodic boundary assumption of the FFT solver applied to a non-periodic Gaussian patch, which creates a slight ``wrapping'' artifact at the edges.
+We sample an analytic Gaussian height map and exact pixel spacing, guaranteeing a reference surface with known curvature for validation. Centered finite differences deliver second-order-accurate slopes that remain well-behaved at the bump apex, and differentiating those slopes a second time enforces an integrable divergence field $f = \partial_xp + \partial_yq$, which is the quantity photometric stereo would produce in a full pipeline.
 
-\begin{figure}[H]
-\centering
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp1_3d_true.png}
-\caption{True 3D}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp1_3d_rec.png}
-\caption{Reconstruction}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp1_Z_true.png}
-\caption{Ground-truth depth}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp1_Z_rec.png}
-\caption{Recovered depth}
-\end{subfigure}
+The FFT-based Poisson solver then divides by the spectral Laplacian eigenvalues after zeroing the DC entry, yielding a fast reconstruction whose only degree of freedom -- a constant bias -- is removed by mean-centering both $Z_{\text{true}}$ and $Z_{\text{rec}}$. Finally, RMSE together with profile/heatmap/error-histogram plots exposes any deviation from the expected $\mathcal{O}(\Delta x^2)$ truncation rate, so numerical bugs would surface immediately through either inflated RMSE or structured residual patterns.
 
-\bigskip
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp1_error.png}
-\caption{Depth error}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp1_profile.png}
-\caption{Center-line profile}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp1_hist.png}
-\caption{Error histogram}
-\end{subfigure}
-\caption{Validation 1 Results. Exact Gaussian gradients drive the FFT solver, yielding extremely low error and verifying the integrator implementation.}
-\label{fig:exp1_layout}
-\end{figure}
-
-\subsubsection{Validation 2: Full PS Pipeline (Image $\rightarrow$ Height)}
-
-Next, we validate the full pipeline. We render five Lambertian images of the Gaussian surface (one zenith, four oblique) and use photometric stereo to estimate the normals before integration. This introduces realistic errors associated with the least-squares normal fit.
+\subsubsection{Validation 2: Full Photometric Stereo Pipeline (Image $\rightarrow$ Height)}
 
 \begin{center}
 \resizebox{0.9\linewidth}{!}{%
@@ -1443,47 +1406,14 @@ Next, we validate the full pipeline. We render five Lambertian images of the Gau
 }%
 \end{center}
 
-Figure~\ref{fig:exp2_layout} shows the results. The normal estimation is highly accurate in the center where all five lights illuminate the surface. Near the boundaries, grazing angles lead to slightly higher angular errors. However, the integrated surface remains robust, with an RMSE ($2.26 \times 10^{-2}$) only marginally higher than the solver-only baseline. This confirms that the least-squares normal estimation is working correctly and passing high-quality gradients to the integrator.
+Validation 2 instantiates the complete photometric stereo pipeline on the same Gaussian surface used in Validation 1. We first compute ground-truth normals $N_{\text{true}}$ from the height map $Z_{\text{true}}$ by finite differences and normalization.
 
-\begin{figure}[H]
-\centering
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_3d_true.png}
-\caption{True 3D}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_3d_est.png}
-\caption{Reconstruction}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_Z_est.png}
-\caption{Recovered depth}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_error.png}
-\caption{Depth error}
-\end{subfigure}
+Five directional lights are then defined: one frontal overhead light $L_0 = [0, 0, 1]^T$ and four oblique corner lights with directions proportional to $[1, 1, 2]^T$, $[-1, 1, 2]^T$, $[1, -1, 2]^T$, and $[-1, -1, 2]^T$, each normalized to unit length. For each light $L_i$ we render a synthetic Lambertian image according to $I_i(x, y) = \max(0, N_{\text{true}}(x, y) \cdot L_i)$ with unit albedo and no added noise, yielding a stack of five views.
 
-\bigskip
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_normals_gt.png}
-\caption{Normals (GT)}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_normals_est.png}
-\caption{Normals (est.)}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_profile.png}
-\caption{Center-line profile}
-\end{subfigure}
-\begin{subfigure}[b]{0.23\textwidth}
-\includegraphics[width=\linewidth]{exp2_hist.png}
-\caption{Depth error hist.}
-\end{subfigure}
-\caption{Validation 2 Results. The full pipeline achieves RMSE $=2.26\times10^{-2}$. Angular errors are suppressed across most of the dome, verifying the complete photometric stereo workflow.}
-\label{fig:exp2_layout}
-\end{figure}
+At each pixel we then apply classical photometric stereo: the light directions are assembled into a $5\times3$ matrix $S$, the corresponding intensity vector $\mathbf{I}(x, y)$ is formed, and we solve $S\mathbf{g}(x, y) = \mathbf{I}(x, y)$ in the least-squares sense via the pseudoinverse $\mathbf{g} = S^+\mathbf{I}$. Normalizing $\mathbf{g}$ gives the estimated unit normal $N_{\text{est}}(x, y)$. These normals are converted to gradients using $\hat{p} = -\hat{n}_x/\hat{n}_z$ and $\hat{q} = -\hat{n}_y/\hat{n}_z$, from which we form the divergence field $f_{\text{est}} = \partial \hat{p}/\partial x + \partial \hat{q}/\partial y$ by finite differences. The divergence is passed to the FFT-based Poisson solver, using the same grid spacing $(\Delta x, \Delta y)$ as in Experiment 1, to recover a centered depth map $Z_{\text{est}}$.
+
+Finally, reconstruction quality is quantified in two ways. Depth accuracy is measured by the root-mean-square error (RMSE) between the centered ground-truth height $Z_{\text{true}} - \bar{Z}_{\text{true}}$ and the centered reconstruction $Z_{\text{est}} - \bar{Z}_{\text{est}}$. Normal accuracy is measured via the angular error: for each pixel we compute $\theta(x, y) = \arccos(\mathrm{clip}(N_{\text{true}}(x, y) \cdot N_{\text{est}}(x, y), -1, 1))$ in degrees and report the mean of $\theta$ over the domain.
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PLACEHOLDER: Section 5.4 - Smooth Curved Surface Experiments

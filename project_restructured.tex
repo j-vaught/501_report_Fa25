@@ -503,11 +503,46 @@ In other words, the source term must integrate to zero over the domain. Even whe
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PLACEHOLDER: Section 2.4 - Analytical Solution: Separation of Variables
+\subsection{Analytical Solution via Separation of Variables}
+
+Numerical solvers (FFT, finite difference) provide efficient solutions to the Poisson equation, but how do we know they are correct? Analytical solutions serve as ground truth for validating numerical implementations. By deriving closed-form expressions for simple test cases, we can compare numerical output against exact mathematics and quantify solver accuracy.
+
+\subsubsection{Eigenfunction Expansion}
+
+Consider the 2D Poisson equation on a rectangular domain $\Omega = [0, L_x] \times [0, L_y]$ with homogeneous Dirichlet boundary conditions:
+\begin{equation}
+\nabla^2 z = f(x,y), \quad (x,y) \in \Omega, \quad z|_{\partial \Omega} = 0
+\end{equation}
+Using separation of variables, we assume $z(x,y) = X(x)Y(y)$. The homogeneous boundary conditions require $X(0) = X(L_x) = 0$ and $Y(0) = Y(L_y) = 0$, which are satisfied by sine functions. The solution can be written as an eigenfunction expansion:
+\begin{equation}
+z(x,y) = \sum_{m=1}^{\infty}\sum_{n=1}^{\infty} A_{mn} \sin\left(\frac{m\pi x}{L_x}\right) \sin\left(\frac{n\pi y}{L_y}\right)
+\end{equation}
+The eigenfunctions $\sin(m\pi x/L_x)\sin(n\pi y/L_y)$ form an orthonormal basis for the solution space. Each eigenfunction satisfies the Laplacian eigenvalue problem with eigenvalue $-\lambda_{mn}$ where:
+\begin{equation}
+\lambda_{mn} = \frac{m^2\pi^2}{L_x^2} + \frac{n^2\pi^2}{L_y^2}
+\end{equation}
+Substituting the expansion into the Poisson equation and projecting onto each eigenfunction yields the modal amplitudes:
+\begin{equation}
+A_{mn} = -\frac{F_{mn}}{\lambda_{mn}}, \quad \text{where } F_{mn} = \frac{4}{L_x L_y} \int_0^{L_x}\int_0^{L_y} f(x,y) \sin\left(\frac{m\pi x}{L_x}\right) \sin\left(\frac{n\pi y}{L_y}\right) dy\, dx
+\end{equation}
+The coefficient $F_{mn}$ is the projection of the source term $f$ onto each eigenfunction. This is precisely what FFT-based solvers compute numerically: the Discrete Fourier Transform projects the discretized $f$ onto sinusoidal basis functions, and division by the eigenvalues $\lambda_{mn}$ yields the solution coefficients.
+
+\subsubsection{Worked Example: Constant Source Term}
+
+For a uniformly sloped plane, the gradient field has constant divergence $f(x,y) = f_0$. This test case admits a closed-form solution that validates our numerical pipeline.
+
+Computing the Fourier coefficients of the constant function:
+\begin{equation}
+F_{mn} = \frac{4f_0}{L_x L_y} \int_0^{L_x} \sin\left(\frac{m\pi x}{L_x}\right) dx \int_0^{L_y} \sin\left(\frac{n\pi y}{L_y}\right) dy
+\end{equation}
+Each integral evaluates to $\frac{L}{\pi} \cdot \frac{1-\cos(m\pi)}{m}$, which is zero for even $m$ (since $\cos(m\pi) = 1$) and $\frac{2L}{m\pi}$ for odd $m$. Thus only odd indices contribute, and the modal amplitudes become:
+\begin{equation}
+A_{mn} = -\frac{16 f_0}{mn\pi^4} \cdot \frac{1}{\frac{m^2}{L_x^2}+\frac{n^2}{L_y^2}}, \quad m,n \text{ odd}; \qquad A_{mn}=0, \quad m \text{ or } n \text{ even}
+\end{equation}
+The $(1,1)$ mode dominates the reconstruction since higher modes decay rapidly. This analytical result provides ground truth for testing: we generate a synthetic test case with constant $f_0$, solve numerically with the FFT solver, and compare against the truncated series. Agreement to machine precision confirms correct implementation.
 
 
-
-
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of Chapter 2: Mathematical Foundation
 
 \end{document}

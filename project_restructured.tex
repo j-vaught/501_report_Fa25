@@ -481,19 +481,33 @@ Periodic conditions are rarely physical for real surfaces but are computationall
 
 \subsubsection{Compatibility and Uniqueness}
 
-For the Dirichlet problem on a bounded domain, a unique solution exists for any smooth right-hand side $f$ and boundary data $g$. For the Neumann problem, a compatibility condition must hold. Applying the divergence theorem:
+The three boundary condition types have different uniqueness and compatibility properties, which determine when a solution exists and whether it is unique up to an additive constant.
+
+\textit{Dirichlet conditions} guarantee a unique solution for any smooth right-hand side $f$ and boundary data $g$. No additional constraints are required---the boundary values fully determine the solution.
+
+\textit{Neumann conditions} require a compatibility constraint. Applying the divergence theorem to the Poisson equation:
 \begin{equation}
 \iint_\Omega \nabla^2 z \, dA = \oint_{\partial\Omega} \frac{\partial z}{\partial n} \, ds
 \end{equation}
-Substituting $\nabla^2 z = f$ and the Neumann condition:
+Substituting $\nabla^2 z = f$ and the Neumann condition $\partial z/\partial n = h$:
 \begin{equation}
 \iint_\Omega f \, dA = \oint_{\partial\Omega} h \, ds
 \end{equation}
-When $h = 0$ (homogeneous Neumann), solvability requires $\iint_\Omega f \, dA = 0$, i.e., the source term must integrate to zero over the domain. Any additive constant $z + c$ is also a solution, so we pick the unique solution with zero mean. The same compatibility condition applies to periodic boundary conditions: the FFT solver enforces $\hat{F}[0,0] = 0$ to satisfy this constraint.
+For homogeneous Neumann conditions ($h = 0$), solvability requires:
+\begin{equation}
+\iint_\Omega f \, dA = 0
+\end{equation}
+In other words, the source term must integrate to zero over the domain. Even when this condition is satisfied, the solution is unique only up to an additive constant---any $z + c$ is also a solution. We select the unique solution with zero mean.
+
+\textit{Periodic conditions} have the same compatibility requirement as homogeneous Neumann. Since the domain wraps around with no boundary flux, the integral constraint $\iint f \, dA = 0$ must hold. In the FFT formulation, this corresponds to the DC component $\hat{F}[0,0] = 0$---the zero-frequency Fourier coefficient must vanish. The FFT solver enforces this by setting $\hat{F}[0,0] = 0$ before division by the eigenvalues. Like Neumann, periodic conditions also leave an additive constant ambiguity, resolved by zero-mean normalization.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PLACEHOLDER: Section 2.4 - Analytical Solution: Separation of Variables
 
-\end{document}
 
+
+
+
+
+\end{document}

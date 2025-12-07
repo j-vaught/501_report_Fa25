@@ -18,7 +18,7 @@ PROPOSED DOCUMENT STRUCTURE
        2.3.1 Dirichlet Conditions
        2.3.2 Neumann Conditions
        2.3.3 Compatibility and Uniqueness
-   2.4 Analytical Solution: Separation of Variables
+   2.4 Separation of Variables
        2.4.1 Eigenfunction Expansion
        2.4.2 Worked Example: Constant f(x,y)
 

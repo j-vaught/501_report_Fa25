@@ -1236,8 +1236,256 @@ Validation of the implementation involves several strategies shown in Figure~\re
 
 Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis.
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % End of Chapter 4: Implementation
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER 5: EXPERIMENTAL VALIDATION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{Experimental Validation}
+
+This chapter presents experimental results validating the photometric stereo pipeline and Poisson solvers. We use synthetic test surfaces with known ground truth to evaluate reconstruction accuracy, enabling quantitative error analysis. The experiments compare solver performance across different boundary conditions, noise levels, and surface geometries.
+
+\subsection{Test Surfaces}
+
+Validation requires surfaces with analytically known height fields $z(x,y)$ so reconstruction errors can be measured precisely. We define a suite of test surfaces that span different geometric characteristics---smooth and peaked, convex and saddle-shaped, single-scale and multi-frequency.
+
+\subsubsection{Surface Selection Rationale}
+
+We selected eight synthetic surfaces that stress different aspects of the pipeline: smooth, radially symmetric shapes (Gaussian bump, hemisphere, ellipsoid, soft cone) reveal how well integration preserves curvature and absolute depth; piecewise-linear or sign-changing geometries (softened cube, saddle) probe sensitivity to sharp edges and mixed second derivatives; periodic or multi-modal landscapes (sinusoidal, MATLAB Peaks) stress global consistency.
+
+Figure~\ref{fig:test_surfaces} provides a visualization of these geometries, and Table~\ref{tab:test_surface_formulas} gives their analytical definitions.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{surfaces}
+\caption{Eight synthetic surfaces used: (a) Gaussian bump, (b) hemisphere, (c) softened cube, (d) ellipsoid, (e) sinusoidal, (f) soft cone, (g) saddle, and (h) MATLAB Peaks.}
+\label{fig:test_surfaces}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Analytical definitions of the benchmark surfaces.}
+\label{tab:test_surface_formulas}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabularx}{\textwidth}{lX}
+\hline\hline
+\textbf{Surface} & \textbf{Height function $z(x,y)$} \\
+\hline
+Gaussian bump & $\exp\!\left(-\dfrac{x^2+y^2}{2\sigma^2}\right)$, $\sigma = 0.4$ \\
+Hemisphere & $\sqrt{R^2 - (x^2 + y^2)}$ for $x^2 + y^2 \le R^2$, $R = 0.9$ \\
+Softened cube & $0.6\,\text{clip}\!\left(1 - \dfrac{\max(|x|,|y|) - 0.45}{0.1},\,0,\,1\right)$ \\
+Ellipsoid & $c\sqrt{1 - (x/a)^2 - (y/b)^2}$, $a = 0.8$, $b = 0.6$, $c = 0.5$ \\
+Sinusoidal & $A \sin(\pi x)\sin(\pi y)$, $A = 0.3$ \\
+Soft cone & $h \max\!\left(0, 1 - \dfrac{\sqrt{x^2 + y^2}}{R}\right)$, $h = 0.8$, $R = 0.9$ \\
+Saddle & $\alpha x y$, $\alpha = 0.3$ \\
+MATLAB Peaks & $3(1-x)^2 e^{-x^2-(y+1)^2} - 10\!\left(\dfrac{x}{5} - x^3 - y^5\right)e^{-x^2-y^2} + \dfrac{1}{3}e^{-(x+1)^2 - y^2}$ \\
+\hline\hline
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+\end{table}
+
+Together, these surfaces provide comprehensive coverage of the geometric scenarios encountered in real photometric stereo applications.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Experimental Protocol}
+
+To rigorously evaluate the pipeline, we follow a standardized testing protocol across all surfaces. This ensures that performance differences can be attributed to surface geometry or solver choice rather than varying implementation details.
+
+
+\subsubsection{Common Setup Parameters}
+
+Unless otherwise specified, all experiments use the default parameters listed in Table~\ref{tab:setup_params}. This standardization allows for direct comparison across different experiments.
+
+\begin{table}[H]
+\centering
+\caption{Default experimental parameters used across all test surfaces.}
+\label{tab:setup_params}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{lX}
+\hline\hline
+\textbf{Parameter} & \textbf{Configuration Details} \\
+\hline
+\textbf{Grid Resolution} & $128 \times 128$ pixel grid covering the domain $(x,y) \in [-1, 1] \times [-1, 1]$. This resolution captures sufficient surface detail while maintaining tractable computation times. \\
+\textbf{Lighting} & A ``ring + zenith'' configuration with $K=5$ lights: four at $45^\circ$ elevation ($90^\circ$ azimuth spacing) and one overhead zenith light given by $\mathbf{l} = (0,0,1)^T$. \\
+\textbf{Reflectance} & Perfect Lambertian reflectance with uniform unit albedo ($\rho = 1.0$) and no specular highlights or cast shadows in the baseline simulations. \\
+\textbf{Noise Model} & Baseline tests use ideal noise-free images. Robustness tests inject additive zero-mean Gaussian noise $\mathcal{N}(0, \sigma^2)$ to normalized pixel intensities. \\
+\hline\hline
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+\end{table}
+
+
+\subsubsection{Evaluation Metrics}
+
+We quantify reconstruction quality using two primary metrics: one for surface orientation and one for surface depth. It is important to present them in this order, as normal estimation errors are the causal precursor to depth reconstruction errors.
+
+\paragraph{Mean Angular Error (MAE).}
+This metric evaluates how well the surface normals are recovered, which is the direct output of the photometric stereo step. For each pixel, the angular error $\theta$ is the angle between the true normal $\mathbf{n}_{\text{gt}}$ and estimated normal $\mathbf{n}_{\text{rec}}$:
+\begin{equation}
+\theta(x,y) = \arccos\left( \text{clip}(\mathbf{n}_{\text{gt}} \cdot \mathbf{n}_{\text{rec}}, -1, 1) \right)
+\end{equation}
+We report the mean angular error over the domain in degrees:
+\begin{equation}
+\text{MAE} = \frac{1}{N} \sum_{(x,y) \in \Omega} \theta(x,y) \, \frac{180}{\pi}
+\end{equation}
+Low MAE implies accurate local slope estimation. However, even small angular biases can accumulate during integration, leading to significant low-frequency depth distortions.
+
+\paragraph{Depth Error (RMSE).}
+The Root Mean Square Error (RMSE) measures the global accuracy of the integrated surface. Since Poisson integration yields height up to an additive constant, we align the reconstruction $z_{\text{rec}}$ with the ground truth $z_{\text{gt}}$ by subtracting their means:
+\begin{equation}
+z'_{\text{rec}} = z_{\text{rec}} - \bar{z}_{\text{rec}}, \quad z'_{\text{gt}} = z_{\text{gt}} - \bar{z}_{\text{gt}}
+\end{equation}
+RMSE is then computed over all valid pixels $N$:
+\begin{equation}
+\text{RMSE} = \sqrt{\frac{1}{N} \sum_{(x,y) \in \Omega} (z'_{\text{rec}}(x,y) - z'_{\text{gt}}(x,y))^2}
+\end{equation}
+This metric captures the cumulative effect of angular errors. High RMSE alongside low MAE typically indicates a systematic bias in the normal field (e.g., ``slanting'' the entire surface) that integration amplifies over the domain.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Core Validation}\label{sec:core_validation}
+
+This section validates the two primary software components: the Poisson solver itself (using exact gradients) and the complete photometric stereo pipeline (using rendered images).
+
+\subsubsection{Validation 1: Poisson Solver Validation (Gradient $\rightarrow$ Height)}
+
+We first isolate the integration step by bypassing the normal estimation entirely. Using the analytic Gaussian surface, we compute exact gradients $(p,q)$ analytically, differentiate them to form the divergence field $f$, and pass this directly to the FFT solver. This establishes the numerical floor of the method, separating integration error from photometric noise.
+
+\begin{center}
+\resizebox{0.9\linewidth}{!}{%
+\begin{tikzpicture}[>=latex,
+                    every node/.style={draw=USCGarnet, rounded corners, align=center,
+                                       text width=3.4cm, fill=USCGarnet!30},
+                    every path/.style={draw=USCGarnet, thick}]
+\node (surf) {Generate \\Gaussian $Z_{\text{true}}$};
+\node[right=3.6cm of surf] (grad) {Compute \\gradients $(p,q)$ };
+\node[right=3.6cm of grad] (div) {Form divergence $f$\\ $\partial_x p + \partial_y q$};
+\node[below=2.0cm of surf] (solve) {Solve FFT Poisson, zero DC};
+\node[right=3.6cm of solve] (cmp) {Compare\\ $Z_{\text{true},c}$ vs $Z_{\text{rec},c}$};
+\node[right=3.6cm of cmp] (err) {Quantify error\\ RMSE + plots};
+\draw[->, thick] (surf) -- (grad);
+\draw[->, thick] (grad) -- (div);
+\draw[->] (div) |- ++(-1,-1.6) -| (solve);
+\draw[->, thick] (solve) -- (cmp);
+\draw[->, thick] (cmp) -- (err);
+\end{tikzpicture}%
+}
+\end{center}
+
+Figure~\ref{fig:exp1_layout} confirms that the solver is functioning correctly. The reconstructed surface is visually indistinguishable from the ground truth, and the error histogram is tightly concentrated around zero. The small residual errors (RMSE $\approx 2.2 \times 10^{-2}$) arise primarily from the periodic boundary assumption of the FFT solver applied to a non-periodic Gaussian patch, which creates a slight ``wrapping'' artifact at the edges.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp1_3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp1_3d_rec.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp1_Z_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp1_Z_rec.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp1_error.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp1_profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp1_hist.png}
+\caption{Error histogram}
+\end{subfigure}
+\caption{Validation 1 Results. Exact Gaussian gradients drive the FFT solver, yielding extremely low error and verifying the integrator implementation.}
+\label{fig:exp1_layout}
+\end{figure}
+
+\subsubsection{Validation 2: Full PS Pipeline (Image $\rightarrow$ Height)}
+
+Next, we validate the full pipeline. We render five Lambertian images of the Gaussian surface (one zenith, four oblique) and use photometric stereo to estimate the normals before integration. This introduces realistic errors associated with the least-squares normal fit.
+
+\begin{center}
+\resizebox{0.9\linewidth}{!}{%
+\begin{tikzpicture}[node distance=1.4cm,>=latex,
+                    every node/.style={draw=USCGarnet, rounded corners, align=center,
+                                       text width=3.1cm, fill=USCGarnet!30},
+                    every path/.style={draw=USCGarnet, thick}]
+\node (surf) {Gaussian height map $Z_{\text{true}}$};
+\node[right=of surf] (normals) {True normals $N_{\text{true}}$ from $\nabla Z_{\text{true}}$};
+\node[right=of normals] (lights) {5 unit lights (top + 4 corners)};
+\node[right=of lights] (render) {Lambertian render: 5 images $I_i$};
+\node[below=of surf] (ps) {Photometric stereo: $S^+\mathbf{I}$};
+\node[right=of ps] (grads) {Gradients $(\hat{p},\hat{q})$ and $f_{\text{est}}$};
+\node[right=of grads] (poisson) {FFT Poisson solve $\Rightarrow Z_{\text{est}}$};
+\node[right=of poisson] (metrics) {Depth RMSE \& angular error};
+\draw[->] (surf) -- (normals);
+\draw[->] (normals) -- (lights);
+\draw[->] (lights) -- (render);
+\draw[->] (render) |- ++(-1,-1.2) -| (ps);
+\draw[->] (ps) -- (grads);
+\draw[->] (grads) -- (poisson);
+\draw[->] (poisson) -- (metrics);
+\end{tikzpicture}
+}%
+\end{center}
+
+Figure~\ref{fig:exp2_layout} shows the results. The normal estimation is highly accurate in the center where all five lights illuminate the surface. Near the boundaries, grazing angles lead to slightly higher angular errors. However, the integrated surface remains robust, with an RMSE ($2.26 \times 10^{-2}$) only marginally higher than the solver-only baseline. This confirms that the least-squares normal estimation is working correctly and passing high-quality gradients to the integrator.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_Z_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_error.png}
+\caption{Depth error}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_normals_gt.png}
+\caption{Normals (GT)}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_normals_est.png}
+\caption{Normals (est.)}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{exp2_hist.png}
+\caption{Depth error hist.}
+\end{subfigure}
+\caption{Validation 2 Results. The full pipeline achieves RMSE $=2.26\times10^{-2}$. Angular errors are suppressed across most of the dome, verifying the complete photometric stereo workflow.}
+\label{fig:exp2_layout}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PLACEHOLDER: Section 5.4 - Smooth Curved Surface Experiments
 
 \end{document}

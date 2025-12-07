@@ -8,6 +8,6 @@
 \contentsline {subsubsection}{\numberline {2.1.1}Image Formation Model}{5}{}%
 \contentsline {subsubsection}{\numberline {2.1.2}Lambertian Reflectance}{6}{}%
 \contentsline {subsubsection}{\numberline {2.1.3}Least-Squares Normal Recovery}{6}{}%
-\contentsline {paragraph}{Pseudoinverse Solution.}{6}{}%
+\contentsline {paragraph}{Pseudoinverse Solution.}{7}{}%
 \contentsline {paragraph}{Conditioning and Light Placement.}{7}{}%
 \contentsline {paragraph}{Handling Shadows.}{7}{}%

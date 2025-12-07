@@ -276,18 +276,20 @@ The $\max$ operator enforces attached shadows: when a light illuminates the surf
 
 The Lambertian assumption states that a surface appears equally bright from all viewing directions---light is reflected diffusely in all directions. Mathematically, the reflected radiance is proportional to $\cos\theta = \mathbf{n} \cdot \mathbf{L}$, where $\theta$ is the angle between the surface normal and the incident light direction.
 
-A depth map $z(x,y)$ induces a surface normal via the gradient. The tangent vectors in the $x$ and $y$ directions are:
+To connect surface geometry to shading, we must express the surface normal in terms of the depth map $z(x,y)$. We begin by computing the tangent vectors to the surface. These tangent vectors represent the local orientation of the surface along the $x$ and $y$ coordinate directions:
 \begin{align}
 \frac{\partial \mathbf{X}}{\partial x} &= (1, 0, p), \quad \text{where } p = \frac{\partial z}{\partial x} \\
 \frac{\partial \mathbf{X}}{\partial y} &= (0, 1, q), \quad \text{where } q = \frac{\partial z}{\partial y}
 \end{align}
+Here, $p$ and $q$ represent the local slopes of the surface in the $x$ and $y$ directions, respectively. Note that the first two components of each tangent vector are $(1,0)$ and $(0,1)$ because we move one unit along the respective image coordinate while the surface height changes by $p$ or $q$.
 
-The (unnormalized) surface normal is obtained via the cross product:
+The surface normal is perpendicular to both tangent vectors and can be computed via their cross product:
 \begin{equation}
 \tilde{\mathbf{n}} = \frac{\partial \mathbf{X}}{\partial x} \times \frac{\partial \mathbf{X}}{\partial y} = (-p, -q, 1)
 \end{equation}
+This unnormalized normal $\tilde{\mathbf{n}}$ points away from the surface but does not necessarily have unit length. The negative signs on $p$ and $q$ arise naturally from the cross product and ensure the normal points outward (away from the surface) rather than inward.
 
-Normalizing yields the unit normal:
+To obtain a unit normal vector (required for computing the geometric factor $\mathbf{n} \cdot \mathbf{L}$), we divide by the magnitude:
 \begin{equation}
 \mathbf{n} = \frac{\tilde{\mathbf{n}}}{\|\tilde{\mathbf{n}}\|} = \frac{(-p,-q,1)}{\sqrt{p^2+q^2+1}}
 \label{eq:normalfrompq}

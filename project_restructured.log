@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  7 DEC 2025 13:26
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.3.8)  7 DEC 2025 13:30
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -788,6 +788,10 @@ Underfull \hbox (badness 2197) in paragraph at lines 209--209
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
  ) 
 Here is how much of TeX's memory you used:
  17819 strings out of 473190
@@ -814,7 +818,7 @@ e/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/
 25/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/local/texlive/202
 5/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/texlive
 /2025/texmf-dist/fonts/type1/public/cm-super/sfrm1000.pfb>
-Output written on project_restructured.pdf (7 pages, 206627 bytes).
+Output written on project_restructured.pdf (7 pages, 207482 bytes).
 PDF statistics:
  117 PDF objects out of 1000 (max. 8388607)
  73 compressed objects within 1 object stream

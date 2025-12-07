@@ -1,0 +1,13 @@
+\contentsline {section}{\numberline {1}Introduction}{3}{}%
+\contentsline {subsection}{\numberline {1.1}What We Want to Model}{3}{}%
+\contentsline {subsection}{\numberline {1.2}Why This Problem is Important}{3}{}%
+\contentsline {subsection}{\numberline {1.3}Comparison with Alternative 3D Reconstruction Methods}{4}{}%
+\contentsline {subsection}{\numberline {1.4}The Core PDE Problem}{4}{}%
+\contentsline {section}{\numberline {2}Mathematical Foundation}{5}{}%
+\contentsline {subsection}{\numberline {2.1}Photometric Stereo Principle}{5}{}%
+\contentsline {subsubsection}{\numberline {2.1.1}Image Formation Model}{5}{}%
+\contentsline {subsubsection}{\numberline {2.1.2}Lambertian Reflectance}{6}{}%
+\contentsline {subsubsection}{\numberline {2.1.3}Least-Squares Normal Recovery}{6}{}%
+\contentsline {paragraph}{Pseudoinverse Solution.}{6}{}%
+\contentsline {paragraph}{Conditioning and Light Placement.}{7}{}%
+\contentsline {paragraph}{Handling Shadows.}{7}{}%

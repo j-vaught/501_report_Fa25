@@ -1,0 +1,414 @@
+\newpage
+\appendix
+\section{MATLAB Reference Implementation}
+\begin{lstlisting}[caption={Minimal MATLAB photometric stereo + Poisson solver},label={lst:synthetic_ps_min}]
+function synthetic_ps_min(fig_tag)
+%SYNTHETIC_PS_MIN Minimal photometric stereo + Poisson reconstruction in MATLAB.
+%   Mirrors synthetic_ps_min.py. Generates the same figures + results JSON.
+
+    if nargin < 1
+        fig_tag = "m_";
+    end
+    global FIG_TAG;
+    FIG_TAG = fig_tag;
+
+    ensure_dirs();
+
+    exp1 = exp1_poisson_only(128);
+    exp2 = exp2_ps_gaussian(exp1.Z_true, exp1.dx, exp1.dy);
+    sphere = rotate_light_shape("sphere", 128, 16);
+    cube = rotate_light_shape("cube", 128, 16);
+
+    results = struct( ...
+        "exp1_rmse", exp1.rmse, ...
+        "exp2_rmse", exp2.rmse, ...
+        "sphere_rmse", sphere.rmse, ...
+        "cube_rmse", cube.rmse, ...
+        "sphere_normal_ang_mean", sphere.normal_ang_mean, ...
+        "cube_normal_ang_mean", cube.normal_ang_mean);
+
+    write_results(results);
+    fprintf("Exp1 RMSE: %.15f\n", exp1.rmse);
+    fprintf("Exp2 RMSE: %.15f\n", exp2.rmse);
+    fprintf("Sphere RMSE / ang: %.15f %.15f\n", sphere.rmse, sphere.normal_ang_mean);
+    fprintf("Cube   RMSE / ang: %.15f %.15f\n", cube.rmse, cube.normal_ang_mean);
+
+    compare_against_python(results);
+end
+
+% ---------- experiments ----------
+
+function out = exp1_poisson_only(N)
+    [x, y, Z_true] = create_grid_and_surface(N, N);
+    [dx, dy] = compute_spacing(x, y);
+    [p, q] = compute_gradients(Z_true);
+    p = p / dx;
+    q = q / dy;
+    div = grad_x(p) / dx + grad_y(q) / dy;
+    Z_rec = solve_poisson_fft(div, dx, dy);
+    Zc = Z_true - mean(Z_true, "all");
+    Zrc = Z_rec - mean(Z_rec, "all");
+    rmse = sqrt(mean((Zc(:) - Zrc(:)) .^ 2));
+    save_heatmap(Zc, fig_file("exp1_Z_true.png"), "GT (centered)", "parula", false);
+    save_heatmap(Zrc, fig_file("exp1_Z_rec.png"), "Poisson reconstruction", "parula", false);
+    save_heatmap(Zc - Zrc, fig_file("exp1_error.png"), "Error", "cool", true);
+    save_profile(Zc, Zrc, fig_file("exp1_profile.png"), "Exp1 center profile");
+    save_hist(Zc - Zrc, fig_file("exp1_hist.png"), "Exp1 error histogram");
+    out = struct("rmse", rmse, "Z_true", Z_true, "dx", dx, "dy", dy);
+end
+
+function out = exp2_ps_gaussian(Z_true, dx, dy)
+    N_true = normals_from_height(Z_true, dx, dy);
+    lights = [0 0 1; 1 1 2; -1 1 2; 1 -1 2; -1 -1 2];
+    lights = normalize_rows(lights);
+    images = render_photometric_images(N_true, lights);
+    N_est = photometric_stereo(images, lights);
+    [p_est, q_est] = gradients_from_normals(N_est);
+    div = grad_x(p_est) / dx + grad_y(q_est) / dy;
+    Z_est = solve_poisson_fft(div, dx, dy);
+    Zc = Z_true - mean(Z_true, "all");
+    Zec = Z_est - mean(Z_est, "all");
+    rmse = sqrt(mean((Zc(:) - Zec(:)) .^ 2));
+    save_heatmap(Zec, fig_file("exp2_Z_est.png"), "PS reconstruction", "parula", false);
+    save_heatmap(Zc - Zec, fig_file("exp2_error.png"), "Error", "cool", true);
+    save_heatmap(images(:, :, 1), fig_file("exp2_sample_image.png"), "Sample image", "gray", false);
+    save_image_montage(images, fig_file("exp2_all_images.png"), "All input images");
+    save_normal_rgb(N_true, fig_file("exp2_normals_gt.png"), "GT normals");
+    save_normal_rgb(N_est, fig_file("exp2_normals_est.png"), "Estimated normals");
+    save_profile(Zc, Zec, fig_file("exp2_profile.png"), "Exp2 center profile");
+    save_hist(Zc - Zec, fig_file("exp2_hist.png"), "Exp2 error histogram");
+    out = struct("rmse", rmse);
+end
+
+function out = rotate_light_shape(shape, N, m_lights)
+    [x, y, Z_true] = create_shape_surface(shape, N, N);
+    [dx, dy] = compute_spacing(x, y);
+    N_true = normals_from_height(Z_true, dx, dy);
+    lights = make_rotating_lights(m_lights, 45.0);
+    images = render_photometric_images(N_true, lights);
+    N_est = photometric_stereo(images, lights);
+    [p_est, q_est] = gradients_from_normals(N_est);
+    div = grad_x(p_est) / dx + grad_y(q_est) / dy;
+    Z_est = solve_poisson_fft(div, dx, dy);
+    Zc = Z_true - mean(Z_true, "all");
+    Zec = Z_est - mean(Z_est, "all");
+    rmse = sqrt(mean((Zc(:) - Zec(:)) .^ 2));
+    dotp = sum(N_true .* N_est, 3);
+    dotp = min(max(dotp, -1), 1);
+    ang = rad2deg(acos(dotp));
+
+    base = "shape_" + shape;
+    cap_char = char(shape);
+    cap_char(1) = upper(cap_char(1));
+    cap = string(cap_char);
+    save_heatmap(Zc, fig_file(base + "_Z_true.png"), cap + " GT depth", "parula", false);
+    save_heatmap(Zec, fig_file(base + "_Z_est.png"), cap + " recon", "parula", false);
+    save_heatmap(Zc - Zec, fig_file(base + "_error.png"), cap + " error", "cool", true);
+    save_heatmap(images(:, :, 1), fig_file(base + "_sample_image.png"), cap + " sample", "gray", false);
+    save_image_montage(images, fig_file(base + "_all_images.png"), cap + " all images");
+    save_normal_rgb(N_true, fig_file(base + "_normals_gt.png"), cap + " normals GT");
+    save_normal_rgb(N_est, fig_file(base + "_normals_est.png"), cap + " normals est");
+    save_profile(Zc, Zec, fig_file(base + "_profile.png"), cap + " profile");
+    save_hist(Zc - Zec, fig_file(base + "_hist.png"), cap + " depth error hist");
+    save_hist(ang, fig_file(base + "_normal_ang_hist.png"), cap + " normal angular error (deg)");
+
+    out = struct("rmse", rmse, "normal_ang_mean", mean(ang, "all"));
+end
+
+% ---------- utilities ----------
+
+function [x, y, Z_true] = create_grid_and_surface(Nx, Ny)
+    x = linspace(-1, 1, Nx);
+    y = linspace(-1, 1, Ny);
+    [X, Y] = meshgrid(x, y);
+    sigma = 0.4;
+    Z_true = exp(-(X .^ 2 + Y .^ 2) / (2 * sigma ^ 2));
+end
+
+function [x, y, Z] = create_shape_surface(shape, Nx, Ny)
+    x = linspace(-1, 1, Nx);
+    y = linspace(-1, 1, Ny);
+    [X, Y] = meshgrid(x, y);
+    switch shape
+        case "sphere"
+            radius = 0.9;
+            r2 = X .^ 2 + Y .^ 2;
+            Z = zeros(size(X));
+            inside = r2 <= radius ^ 2;
+            Z(inside) = sqrt(radius ^ 2 - r2(inside));
+        case "cube"
+            cube_half = 0.35;
+            cube_edge = 0.1;
+            cube_height = 0.6;
+            r = max(abs(X), abs(Y));
+            Z = cube_height * clip(1.0 - (r - cube_half) / cube_edge, 0.0, 1.0);
+        otherwise
+            error("shape must be 'sphere' or 'cube'");
+    end
+end
+
+function [dx, dy] = compute_spacing(x, y)
+    if numel(x) > 1
+        dx = x(2) - x(1);
+    else
+        dx = 1.0;
+    end
+    if numel(y) > 1
+        dy = y(2) - y(1);
+    else
+        dy = 1.0;
+    end
+end
+
+function Z = solve_poisson_fft(f, dx, dy)
+    [H, W] = size(f);
+    kx = 2 * pi * fftfreq(W, dx);
+    ky = 2 * pi * fftfreq(H, dy);
+    [KX, KY] = meshgrid(kx, ky);
+    lam = -(KX .^ 2 + KY .^ 2);
+    F = fft2(f);
+    lam(1, 1) = 1.0;
+    F(1, 1) = 0.0;
+    Z = real(ifft2(F ./ lam));
+end
+
+function [p, q] = compute_gradients(Z)
+    p = grad_x(Z);
+    q = grad_y(Z);
+end
+
+function N = normals_from_height(Z, dx, dy)
+    [p, q] = compute_gradients(Z);
+    p = p / dx;
+    q = q / dy;
+    nx = -p;
+    ny = -q;
+    nz = ones(size(Z));
+    N = cat(3, nx, ny, nz);
+    denom = sqrt(sum(N .^ 2, 3)) + 1e-8;
+    N = N ./ denom;
+end
+
+function images = render_photometric_images(N, lights, albedo, noise_std)
+    if nargin < 3
+        albedo = 1.0;
+    end
+    if nargin < 4
+        noise_std = 0.0;
+    end
+    [H, W, ~] = size(N);
+    m = size(lights, 1);
+    images = zeros(H, W, m);
+    for i = 1:m
+        L = lights(i, :);
+        dotp = N(:, :, 1) * L(1) + N(:, :, 2) * L(2) + N(:, :, 3) * L(3);
+        I = albedo * max(dotp, 0);
+        if noise_std > 0
+            I = I + noise_std * randn(size(I));
+            I = min(max(I, 0), 1);
+        end
+        images(:, :, i) = I;
+    end
+end
+
+function N_est = photometric_stereo(images, lights)
+    [H, W, m] = size(images);
+    S = lights;
+    G = pinv(S) * reshape(permute(images, [3 1 2]), m, []);
+    G = reshape(G.', H, W, 3);
+    norm_g = sqrt(sum(G .^ 2, 3)) + 1e-8;
+    N_est = G ./ norm_g;
+end
+
+function [p, q] = gradients_from_normals(N)
+    nx = N(:, :, 1);
+    ny = N(:, :, 2);
+    nz = N(:, :, 3);
+    epsv = 1e-8;
+    p = -nx ./ (nz + epsv);
+    q = -ny ./ (nz + epsv);
+end
+
+function lights = make_rotating_lights(m, elevation_deg)
+    phi = (0:m - 1)' * (2 * pi / m);
+    el = deg2rad(elevation_deg);
+    lx = cos(phi) * cos(el);
+    ly = sin(phi) * cos(el);
+    lz = ones(size(phi)) * sin(el);
+    lights = [lx, ly, lz];
+    lights = normalize_rows(lights);
+end
+
+function ensure_dirs()
+    if ~exist("figures", "dir")
+        mkdir("figures");
+    end
+end
+
+function save_heatmap(Z, fname, title_text, cmap_name, center_zero)
+    if nargin < 4 || cmap_name == ""
+        cmap_name = "parula";
+    end
+    if nargin < 5
+        center_zero = false;
+    end
+    fig = figure("Visible", "off");
+    imagesc(Z);
+    axis image;
+    set(gca, "YDir", "normal");
+    title(title_text);
+    colorbar;
+    if center_zero
+        vmax = max(abs(Z), [], "all") + 1e-8;
+        caxis([-vmax, vmax]);
+    end
+    colormap(cmap_name);
+    set(fig, "Color", "w");
+    exportgraphics(fig, fname, "Resolution", 200);
+    close(fig);
+end
+
+function save_normal_rgb(N, fname, title_text)
+    rgb = (N + 1) / 2;
+    fig = figure("Visible", "off");
+    image(rgb);
+    axis image off;
+    set(gca, "YDir", "normal");
+    title(title_text);
+    set(fig, "Color", "w");
+    exportgraphics(fig, fname, "Resolution", 200);
+    close(fig);
+end
+
+function save_image_montage(images, fname, title_text, max_cols)
+    if nargin < 4
+        max_cols = 6;
+    end
+    [~, ~, m] = size(images);
+    cols = min(max_cols, m);
+    rows = ceil(m / cols);
+    fig = figure("Visible", "off");
+    set(fig, "Color", "w");
+    for i = 1:m
+        ax = subplot(rows, cols, i, "Parent", fig);
+        imagesc(ax, images(:, :, i));
+        axis(ax, "image");
+        set(ax, "YDir", "normal");
+        colormap(ax, gray);
+        title(ax, "Light " + (i - 1), "FontSize", 8);
+        axis(ax, "off");
+    end
+    sgtitle(title_text);
+    exportgraphics(fig, fname, "Resolution", 200);
+    close(fig);
+end
+
+function save_profile(Z_true, Z_est, fname, title_text)
+    mid = floor(size(Z_true, 1) / 2);
+    fig = figure("Visible", "off");
+    plot(Z_true(mid, :), "LineWidth", 2);
+    hold on;
+    plot(Z_est(mid, :), "--", "LineWidth", 2);
+    hold off;
+    legend("GT", "Recon");
+    title(title_text);
+    xlabel("Pixel");
+    ylabel("Height");
+    set(fig, "Color", "w");
+    exportgraphics(fig, fname, "Resolution", 200);
+    close(fig);
+end
+
+function save_hist(err, fname, title_text)
+    fig = figure("Visible", "off");
+    histogram(err(:), 50, "FaceColor", [0.294 0.545 0.745], "FaceAlpha", 0.85);
+    title(title_text);
+    xlabel("Error");
+    ylabel("Count");
+    set(fig, "Color", "w");
+    exportgraphics(fig, fname, "Resolution", 200);
+    close(fig);
+end
+
+function write_results(results)
+    fid = fopen("results_min_matlab.json", "w");
+    if fid == -1
+        error("Unable to open results file for writing.");
+    end
+    fwrite(fid, jsonencode(results));
+    fclose(fid);
+end
+
+function compare_against_python(matlab_results)
+    py_file = "results_min.json";
+    if ~isfile(py_file)
+        return;
+    end
+    try
+        py_data = jsondecode(fileread(py_file));
+    catch
+        warning("Failed to load %s for comparison.", py_file);
+        return;
+    end
+    fields = fieldnames(matlab_results);
+    fprintf("\nComparison vs %s:\n", py_file);
+    for i = 1:numel(fields)
+        key = fields{i};
+        if isfield(py_data, key)
+            val_mat = matlab_results.(key);
+            val_py = py_data.(key);
+            fprintf("  %s: MATLAB %.12f | Python %.12f | Delta=%.3e\n", key, val_mat, val_py, val_mat - val_py);
+        end
+    end
+end
+
+function fname = fig_file(name)
+    global FIG_TAG;
+    if isempty(FIG_TAG)
+        FIG_TAG = "";
+    end
+    fname = fullfile("figures", FIG_TAG + string(name));
+end
+
+% ---------- math helpers ----------
+
+function arr = clip(arr, lo, hi)
+    arr = min(max(arr, lo), hi);
+end
+
+function freq = fftfreq(n, d)
+    if mod(n, 2) == 0
+        k = [0:(n / 2 - 1), -n / 2:-1];
+    else
+        k = [0:((n - 1) / 2), -((n - 1) / 2):-1];
+    end
+    freq = k / (n * d);
+end
+
+function gx = grad_x(A)
+    [~, W] = size(A);
+    gx = zeros(size(A));
+    if W == 1
+        return;
+    end
+    gx(:, 2:W - 1) = (A(:, 3:W) - A(:, 1:W - 2)) / 2;
+    gx(:, 1) = A(:, 2) - A(:, 1);
+    gx(:, W) = A(:, W) - A(:, W - 1);
+end
+
+function gy = grad_y(A)
+    [H, ~] = size(A);
+    gy = zeros(size(A));
+    if H == 1
+        return;
+    end
+    gy(2:H - 1, :) = (A(3:H, :) - A(1:H - 2, :)) / 2;
+    gy(1, :) = A(2, :) - A(1, :);
+    gy(H, :) = A(H, :) - A(H - 1, :);
+end
+
+function lights = normalize_rows(lights)
+    norms = sqrt(sum(lights .^ 2, 2)) + 1e-12;
+    lights = lights ./ norms;
+end
+\end{lstlisting}

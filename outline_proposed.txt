@@ -1,0 +1,129 @@
+PROPOSED DOCUMENT STRUCTURE
+===========================
+
+1. Introduction / Problem Statement
+   1.1 What We Want to Model
+   1.2 Why This Problem is Important
+   1.3 The Core PDE Problem
+
+2. Mathematical Foundation (NEW - consolidate theory)
+   2.1 Photometric Stereo Principle
+       2.1.1 Image Formation Model
+       2.1.2 Lambertian Reflectance
+       2.1.3 Least-Squares Normal Recovery
+   2.2 Gradient Integration via Poisson Equation
+       2.2.1 Variational Formulation
+       2.2.2 Euler-Lagrange Derivation
+   2.3 Boundary Condition Theory (moved from Sec 3)
+       2.3.1 Dirichlet Conditions
+       2.3.2 Neumann Conditions
+       2.3.3 Compatibility and Uniqueness
+   2.4 Analytical Solution: Separation of Variables
+       2.4.1 Eigenfunction Expansion
+       2.4.2 Worked Example: Constant f(x,y)
+
+3. Numerical Methods (NEW - dedicated chapter for derivations)
+   3.1 Finite Difference Discretization
+       3.1.1 Taylor Series Derivation
+       3.1.2 5-Point Laplacian Stencil
+       3.1.3 Matrix Formulation Az = f
+       3.1.4 Handling Boundary Conditions
+   3.2 FFT-Based Spectral Solver
+       3.2.1 Fourier Transform Approach
+       3.2.2 Connection to Separation of Variables
+       3.2.3 Algorithm Description
+   3.3 Finite Difference Solvers
+       3.3.1 Dirichlet BC Solver
+       3.3.2 Neumann BC Solver
+   3.4 Regularization Methods
+       3.4.1 Tikhonov Regularization Derivation
+       3.4.2 Parameter Selection
+
+4. Implementation (simplified - just algorithms)
+   4.1 Photometric Stereo Pipeline
+       4.1.1 Image Acquisition and Preprocessing
+       4.1.2 Light Matrix Construction
+       4.1.3 Per-Pixel Normal Estimation
+       4.1.4 Gradient Field Computation
+   4.2 Poisson Solver Integration
+       4.2.1 Divergence Field Construction
+       4.2.2 Solver Selection Logic
+       4.2.3 Post-Processing (Mean Centering)
+   4.3 Software Architecture Overview
+       4.3.1 Python Implementation Structure
+       4.3.2 MATLAB Implementation Structure
+       4.3.3 Code Validation Strategy
+
+5. Experimental Validation
+   5.1 Test Surfaces
+       5.1.1 Analytical Surface Definitions
+       5.1.2 Surface Selection Rationale
+   5.2 Experimental Protocol
+       5.2.1 Common Setup Parameters
+       5.2.2 Evaluation Metrics (RMSE, Angular Error)
+   5.3 Core Experiments
+       5.3.1 Experiment 1: Poisson Solver Validation (Gradient → Height)
+       5.3.2 Experiment 2: Full PS Pipeline (Image → Height)
+   5.4 Smooth Curved Surface Experiments
+       5.4.1 Sphere with Rotating Lights
+       5.4.2 Ellipsoid
+       5.4.3 MATLAB Peaks
+   5.5 Sharp-Edged Surface Experiments
+       5.5.1 Soft Cone
+       5.5.2 Cube with Rotating Lights
+   5.6 Oscillating Surface Experiments
+       5.6.1 Saddle (Hyperbolic Paraboloid)
+       5.6.2 Sinusoid
+   5.7 Ablation Studies
+       5.7.1 Light Count Sweep (m = 3 to 20)
+       5.7.2 Noise Robustness (σ = 0 to 0.08)
+       5.7.3 Resolution Convergence Study
+   5.8 Solver Comparison Experiment
+       5.8.1 FFT vs Finite Difference vs Tikhonov
+       5.8.2 Boundary Condition Effects
+
+6. Results & Discussion
+   6.1 Quantitative Results Summary
+       6.1.1 Core Experiment Results Table
+       6.1.2 Shape Experiment Results Table
+       6.1.3 RMSE Summary Bar Chart
+   6.2 Core Experiment Analysis
+       6.2.1 Poisson Solver Validation (Exp 1)
+       6.2.2 Full Pipeline Validation (Exp 2)
+   6.3 Smooth Curved Surface Results
+       6.3.1 Sphere Results
+       6.3.2 Ellipsoid Results
+       6.3.3 MATLAB Peaks Results
+   6.4 Sharp-Edged Surface Results
+       6.4.1 Cone Results
+       6.4.2 Cube Results
+   6.5 Oscillating Surface Results
+       6.5.1 Saddle Results
+       6.5.2 Sinusoid Results
+   6.6 Ablation Study Analysis
+       6.6.1 Lights Sweep Results
+       6.6.2 Noise Robustness Results
+       6.6.3 Convergence Rate Analysis
+   6.7 Solver Comparison Analysis
+       6.7.1 FFT vs FD Performance
+       6.7.2 Boundary Condition Impact
+       6.7.3 Tikhonov Parameter Sweep
+   6.8 Discussion
+       6.8.1 Key Findings
+       6.8.2 Limitations
+       6.8.3 Future Work
+
+Appendix A: MATLAB Implementation
+Appendix B: Python Implementation
+
+
+KEY CHANGES:
+------------
+- NEW Section 2: Pure math/theory with detailed derivations
+- NEW Section 3: Numerical methods (FD + FFT) with examples
+- Simplified Section 4: Just implementation/algorithms
+- Split Section 5-6: Experiments separate from Results/Discussion
+- Boundary conditions moved UP to theory section
+- FFT solver appears ONCE in numerical methods
+- Cleaner hierarchy with proper subsections
+

@@ -1,0 +1,62 @@
+CURRENT DOCUMENT STRUCTURE (30 pages)
+======================================
+
+1. Problem Statement
+   1.1 What We Want to Model
+   1.2 Why This Problem is Important
+   1.3 The Core PDE Problem
+
+2. Problem Formulation
+   2.1 Photometric Stereo Principle
+   2.2 Gradient Integration via Poisson Equation
+   2.3 Analytical Solution: Separation of Variables
+   2.4 Numerical Solution Method: FFT-Based Poisson Solver
+
+3. Program Implementation
+   3.1 Photometric Stereo and Gradient Extraction
+   3.2 FFT-Based Poisson Solver (Spectral Method)
+   3.3 Alternative Solvers
+       3.3.1 Tikhonov-Regularized FFT
+       3.3.2 Sparse Iterative Solver
+   3.4 Boundary Condition Theory
+       3.4.1 Dirichlet Boundary Conditions
+       3.4.2 Neumann Boundary Conditions
+       3.4.3 Compatibility and Uniqueness
+   3.5 Finite Difference Discretization
+       3.5.1 Taylor Series Derivation
+       3.5.2 The 5-Point Laplacian Stencil
+       3.5.3 Matrix Formulation
+       3.5.4 Finite Difference Solver with Dirichlet BC
+
+4. Experimental Validation
+   4.1 Test Surfaces
+   4.2 Experimental Protocol
+       4.2.1 Experiment 1: Poisson Solver Validation
+       4.2.2 Experiment 2: Full Photometric Stereo Pipeline
+       4.2.3 Experiments 3-4: Rotating Light Configurations
+       4.2.4 Ablation Study 1: Varying Number of Lights
+       4.2.5 Ablation Study 2: Noise Robustness
+       4.2.6 Solver Comparison
+       4.2.7 Multiscale Convergence Analysis
+
+5. Results
+   [subsubsections without subsection parent - structure issue]
+   - Experiments 1-2 (Core Validation)
+   - Experiments 3a-3b (Rotating Lights on Complex Shapes)
+   - Enhanced Shapes (5 Additional Surface Geometries)
+   - Ablation Studies and Solver Comparison
+   5.1 Summary of Core Experiments
+   5.2 Summary of Enhanced Shapes
+   5.3 Summary of Ablation Studies
+       5.3.1 Lights Sweep
+       5.3.2 Noise Robustness
+   5.4 Solver Comparison
+
+
+ISSUES:
+-------
+- Section 3 is overloaded (280 lines) - mixes implementation + theory
+- FFT solver appears twice (Sec 2.4 and 3.2)
+- Finite difference math is buried in "Implementation"
+- Results section starts with subsubsection without subsection parent
+- Boundary condition theory is in "Implementation" not math section

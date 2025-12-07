@@ -1,0 +1,333 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{gensymb} % For proper degree symbol in math mode
+\usepackage{graphicx}
+\setlength{\headheight}{13.6pt} % Fix header height warning
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{positioning,matrix}
+\usepackage{listings}
+\usepackage{indentfirst}
+\geometry{margin=1in}
+\pagestyle{fancy}
+\graphicspath{{code/figures/}{../figures/}{figures/}}
+
+% University of South Carolina color palette
+\definecolor{USCGarnet}{HTML}{73000A}
+\definecolor{USCBlack}{HTML}{000000}
+\definecolor{USCRichBlack}{cmyk}{0.4,0.3,0.3,1}
+\definecolor{USCWhite}{HTML}{FFFFFF}
+\definecolor{USCBlackNinety}{HTML}{363636}
+\definecolor{USCBlackSeventy}{HTML}{5C5C5C}
+\definecolor{USCBlackFifty}{HTML}{A2A2A2}
+\definecolor{USCBlackThirty}{HTML}{C7C7C7}
+\definecolor{USCBlackTen}{HTML}{ECECEC}
+\definecolor{USCWarmGrey}{HTML}{676156}
+\definecolor{USCSandstorm}{HTML}{FFF2E3}
+\definecolor{USCRose}{HTML}{CC2E40}
+\definecolor{USCAtlantic}{HTML}{466A9F}
+\definecolor{USCCongaree}{HTML}{1F414D}
+\definecolor{USCHorseshoe}{HTML}{65780B}
+\definecolor{USCGrass}{HTML}{CED318}
+\definecolor{USCHoneycomb}{HTML}{A49137}
+\definecolor{USCDarkGarnet}{HTML}{570008}
+\definecolor{USCAzalea}{HTML}{844247}
+
+\lstdefinestyle{uscMatlab}{
+  language=Matlab,
+  basicstyle=\ttfamily\small\color{USCBlack},
+  keywordstyle=\color{USCGarnet}\bfseries,
+  commentstyle=\color{USCHorseshoe}\itshape,
+  stringstyle=\color{USCAzalea},
+  identifierstyle=\color{USCAtlantic},
+  numberstyle=\tiny\color{USCHorseshoe},
+  backgroundcolor=\color{USCBlackTen},
+  rulecolor=\color{USCAtlantic},
+  frame=single,
+  framerule=0.8pt,
+  xleftmargin=1em,
+  xrightmargin=1em,
+  breaklines=true,
+  tabsize=4,
+  showstringspaces=false,
+  emph={synthetic_ps_min,exp1_poisson_only,exp2_ps_gaussian,rotate_light_shape},emphstyle=\color{USCRose}\bfseries,
+  emph={[2]save_heatmap,save_profile,save_hist},emphstyle={[2]\color{USCDarkGarnet}},
+  morecomment=[l][\color{USCHoneycomb}]{\%\%}
+}
+\lstset{style=uscMatlab}
+
+% Single column, no two-column mode
+\onecolumn
+
+% Customize title formatting
+\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+\title{\LARGE\bfseries 3D Surface Reconstruction via the Photometric Stereo Method}
+
+\author{JC Vaught and Ty Dangerfield \\ Department of Mechanical Engineering, University of South Carolina}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present an analytical and numerical validation of the photometric stereo method used in industrial applications for defect detection. This paper details six primary contributions toward a synthetic photometric pipeline: (1) eight unique surface geometries, (2) rigorous mathematical solutions for both numerical and analytical approaches, (3) detailed algorithmic explanations for each primary component of the pipeline, (4) experimental validation across eight shapes and sixteen light-source locations, (5) ablation studies on number of lights, noise robustness, and resolution impacts, and (6) a comparison of two alternative solver methods and their impact on results. Three-dimensional reconstruction depth errors range from 0.022 through 0.147, well within acceptable tolerances and demonstrating robust recovery. Angular errors of the normals reconstruction remain below $3.5\degree$ for smooth surfaces and $2\degree$ for polyhedral shapes.
+\end{abstract}
+
+\begin{table}[H]
+\centering
+\caption{Individual Contributions}
+\label{tab:individual_contributions}
+\begin{tabular}{ll}
+\hline\hline
+\textbf{Contribution} & \textbf{Primary Contributor(s)} \\
+\hline
+MATLAB implementation of complete program & Ty Dangerfield \\
+Python implementation of complete program & JC Vaught \\
+Photometric principle derivation & Ty Dangerfield \& JC Vaught \\
+Gradient integration with Poisson solver & Ty Dangerfield \\
+Separation of variables and numerical derivations & JC Vaught \\
+Report chapters 1, 3, and 4 (initial) & JC Vaught \\
+Report chapters 1, 2, and 5 (initial) & Ty Dangerfield \\
+Report restructuring and enhanced documentation & JC Vaught \& Ty Dangerfield \\
+Code architecture refinement and expansion & JC Vaught \& Ty Dangerfield \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Meeting Participation}
+\label{tab:meeting_participation}
+\begin{tabular}{lcc}
+\hline\hline
+\textbf{Date} & \textbf{JC Vaught} & \textbf{Ty Dangerfield} \\
+\hline
+19 Nov 2025 & Present & Present \\
+20 Nov 2025 & Present & Present \\
+07 Dec 2025 & Present & Present \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+\vspace{1em}
+\newpage
+
+\tableofcontents
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+\label{sec:introduction}
+
+\subsection{What We Want to Model}
+
+Three-dimensional surface reconstruction is a fundamental problem in manufacturing applications and mechanical engineering more broadly. Photometric stereo is one possible solution among many, yielding highly accurate surface reconstruction compared to a dual-camera setup, which is more often used in robotic applications.
+
+Given multiple 2D images of an object illuminated from different directions, we derive the PDE, analytical solution, and numerical solution that create an accurate reconstruction of the 3D depth map or surface geometry.
+
+\subsection{Why This Problem is Important}
+
+Photometric stereo has impact across multiple domains summarized in Table~\ref{tab:ps_applications}, including industrial inspection, where it supports surface defect detection and tolerance verification; medical imaging, where it enables high-fidelity reconstructions of anatomical surfaces for planning; archaeology, where non-destructive digitization preserves fragile artifacts; robotics and autonomous systems, where detailed surface geometry informs grasping and navigation; and reverse engineering, where recovered shapes seed CAD models for subsequent design and analysis.
+
+\begin{table}[H]
+\centering
+\caption{Representative Application Domains for Photometric Stereo}
+\label{tab:ps_applications}
+\begin{tabular}{ll}
+\hline\hline
+\textbf{Domain} & \textbf{Example Use} \\
+\hline
+Industrial inspection & Surface defect detection, geometric tolerance checks \\
+Medical imaging & Preoperative surface reconstruction for planning \\
+Archaeology & Non-destructive digitization of artifacts \\
+Robotics & Shape-aware grasp planning and manipulation \\
+Autonomous vehicles & High-fidelity surface maps for navigation \\
+Reverse engineering & Recovering geometry for CAD modeling \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+
+\noindent Photometric stereo is an ideal solution for many surface extraction tasks owing to the reduction in moving parts. For example, in structure-from-motion methods, the movement of the camera must be precisely monitored and controlled, necessitating careful calibration; even minor calibration errors can severely impact reconstruction quality. Stereo cameras avoid motion but still suffer from calibration issues because the distance, angle, and focal length of each camera---the intrinsic parameters---must be known precisely to estimate depth. Any error there can distort the recovered geometry due to the trigonometric basis of the method. Photometric stereo, on the other hand, is a completely solid-state approach with a single camera, operates at a higher rate than structure-from-motion, and has lower data requirements than stereo systems. Because it leverages illumination direction to infer depth from shading and then reconstruct normals, it is inherently more tolerant to noise and avoids multi-camera calibration drift.
+
+However, photometric stereo does suffer from one critical constraint: the illumination sequence must be precisely controlled. As a result, it cannot be used effectively in uncontrolled environments such as UAVs or general-purpose robotics, which is why stereo cameras remain the de facto standard outside manufacturing despite their calibration sensitivity. Nevertheless, the fundamental challenge in photometric stereo still lies in \textit{integrating} noisy normal estimates into a globally consistent 3D surface, which requires solving a partial differential equation: the \textbf{Poisson equation}.
+
+\subsection{Comparison with Alternative 3D Reconstruction Methods}
+
+Table~\ref{tab:3d_methods_comparison} compares photometric stereo with other common 3D reconstruction techniques across key performance dimensions. The comparison highlights why photometric stereo is particularly well-suited for controlled industrial environments despite requiring specialized lighting infrastructure.
+
+\begin{table}[H]
+\centering
+\caption{Comparison of 3D Reconstruction Methods}
+\label{tab:3d_methods_comparison}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.8cm}XXX}
+\hline\hline
+\textbf{Method} & \textbf{Advantages} & \textbf{Disadvantages} & \textbf{Typical Use Cases} \\
+\hline
+\textbf{Photometric Stereo} & 
+Single camera; high spatial resolution; dense surface normals; solid-state (no moving parts) & 
+Requires controlled lighting; assumes Lambertian reflectance; limited to near-field & 
+Defect detection, material inspection, quality control \\
+\hline
+\textbf{Stereo Vision} & 
+Passive (no special lighting); works outdoors; real-time capable & 
+Requires precise calibration; texture-dependent; ambiguity in textureless regions & 
+Robotics, autonomous vehicles, SLAM \\
+\hline
+\textbf{Structure from Motion} & 
+Single camera; scales to large scenes; robust to illumination changes & 
+Requires camera motion; computationally intensive; drift accumulation & 
+3D scanning, mapping, archaeological digitization \\
+\hline
+\textbf{Structured Light} & 
+High accuracy; active illumination; fast acquisition & 
+Sensitive to ambient light; limited range; projector-camera calibration required & 
+Industrial metrology, 3D printing, facial scanning \\
+\hline
+\textbf{Time-of-Flight} & 
+Direct depth measurement; real-time; works in low texture & 
+Lower resolution; sensitive to multipath reflections; expensive hardware & 
+Gesture recognition, indoor navigation, human-computer interaction \\
+\hline\hline
+\end{tabularx}
+\end{table}
+
+\noindent Photometric stereo excels in industrial settings where lighting can be tightly controlled and surface finish is relatively uniform. The method's ability to capture dense normal fields from a single viewpoint makes it ideal for in-line inspection systems where throughput and repeatability are critical. By contrast, methods like stereo vision or time-of-flight are better suited to unstructured environments (e.g., outdoor robotics) where lighting variability and scene dynamics preclude the use of synchronized illumination sequences.
+
+\subsection{The Core PDE Problem}
+The fundamental problem reduces to solving the 2D Poisson equation in a rectangular domain:
+\begin{equation}\label{eq:poisson_main}
+\nabla^2 z(x,y) = f(x,y), \quad (x,y) \in \Omega = [0, L_x] \times [0, L_y]
+\end{equation}
+where 
+\begin{align*}
+z(x,y) &= \text{unknown surface height over the image domain} \\
+f(x,y) &= \frac{\partial p}{\partial x} + \frac{\partial q}{\partial y} \quad \text{(divergence of Poisson-derived gradient estimates)} \\
+\Omega &= [0,L_x]\times[0,L_y] \quad \text{(rectangular image domain)}
+\end{align*}
+
+This project demonstrates both analytical (separation of variables) and numerical (FFT-based and finite-difference) methods to solve this fundamental PDE and validate the solutions on synthetic 3D surfaces.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Mathematical Foundation}
+\label{sec:mathematical_foundation}
+
+This chapter establishes the theoretical foundations for photometric stereo reconstruction. We begin with the photometric stereo principle, deriving the relationship between observed image intensities and surface normals under Lambertian reflectance. We then formulate the gradient integration problem as a Poisson equation, providing both variational and Euler-Lagrange derivations. Next, we develop the theory of boundary conditions---Dirichlet, Neumann, and periodic---and their impact on solution uniqueness. Finally, we present an analytical solution via separation of variables, including eigenfunction expansions and worked examples that validate our numerical methods.
+
+\subsection{Photometric Stereo Principle}
+
+Photometric stereo recovers surface normals from multiple images of a static scene illuminated by different light sources. The key insight is that shading variations across images encode the local surface orientation. Table~\ref{tab:ps_assumptions} summarizes the key modeling assumptions underlying this approach.
+
+\begin{table}[H]
+\centering
+\caption{Photometric Stereo Modeling Assumptions}
+\label{tab:ps_assumptions}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{5cm}X}
+\hline\hline
+\textbf{Assumption} & \textbf{Description} \\
+\hline
+Lambertian reflectance & Surface reflects light diffusely in all directions; no specular highlights or glossy reflections \\
+\hline
+Orthographic projection & Camera uses parallel projection (unit focal length); no perspective distortion \\
+\hline
+Known light directions & Light source directions $\mathbf{L}_i$ are calibrated and known a priori \\
+\hline
+Static scene & Surface geometry and camera remain fixed across all images \\
+\hline
+Uniform albedo & In our derivations, albedo $\rho(x,y)$ is assumed constant, though the general formulation allows spatially varying albedo \\
+\hline
+No inter-reflections & Light reaches the surface directly without bouncing off other surfaces \\
+\hline
+Attached shadows only & Self-shadowing is handled via the $\max$ operator; cast shadows from other objects are not modeled \\
+\hline\hline
+\end{tabularx}
+\end{table}
+
+\subsubsection{Image Formation Model}
+
+By assuming an ideal camera with a unit focal length, we map a 3D point $\mathbf{X}$ to image coordinates $\mathbf{x}=(x,y)$ for any arbitrary surface with depth $z(x,y)$. 
+The measured image intensity $I_i$ at pixel $(x,y)$ under light source $i$ is the product of three components: the camera calibration factor $\kappa_i$ (encapsulating exposure, gain, and light source intensity), the material albedo $\rho(x,y) \in [0,1]$ (the fraction of light reflected by the surface), and the geometric factor $\max\!\bigl(0, \mathbf{n}(x,y) \cdot \mathbf{L}_i\bigr)$ (the cosine of the angle between the surface normal $\mathbf{n}$ and light direction $\mathbf{L}_i$). These combine to yield the image formation equation:
+\begin{equation}
+I_i(x,y) = \kappa_i\, \rho(x,y) \max\!\bigl(0, \mathbf{n}(x,y) \cdot \mathbf{L}_i\bigr)
+\label{eq:imageformation}
+\end{equation}
+The $\max$ operator enforces attached shadows: when a light illuminates the surface from behind ($\mathbf{n} \cdot \mathbf{L}_i < 0$), the contribution is zero.
+
+\subsubsection{Lambertian Reflectance}
+
+The Lambertian assumption states that a surface appears equally bright from all viewing directions---light is reflected diffusely in all directions. Mathematically, the reflected radiance is proportional to $\cos\theta = \mathbf{n} \cdot \mathbf{L}$, where $\theta$ is the angle between the surface normal and the incident light direction.
+
+A depth map $z(x,y)$ induces a surface normal via the gradient. The tangent vectors in the $x$ and $y$ directions are:
+\begin{align}
+\frac{\partial \mathbf{X}}{\partial x} &= (1, 0, p), \quad \text{where } p = \frac{\partial z}{\partial x} \\
+\frac{\partial \mathbf{X}}{\partial y} &= (0, 1, q), \quad \text{where } q = \frac{\partial z}{\partial y}
+\end{align}
+
+The (unnormalized) surface normal is obtained via the cross product:
+\begin{equation}
+\tilde{\mathbf{n}} = \frac{\partial \mathbf{X}}{\partial x} \times \frac{\partial \mathbf{X}}{\partial y} = (-p, -q, 1)
+\end{equation}
+
+Normalizing yields the unit normal:
+\begin{equation}
+\mathbf{n} = \frac{\tilde{\mathbf{n}}}{\|\tilde{\mathbf{n}}\|} = \frac{(-p,-q,1)}{\sqrt{p^2+q^2+1}}
+\label{eq:normalfrompq}
+\end{equation}
+
+Equation~\eqref{eq:normalfrompq} explicitly links the integrable gradient field $(p,q)$ to the observed shading---this is the key relationship that enables gradient recovery from images.
+
+\subsubsection{Least-Squares Normal Recovery}
+
+Define the scaled (unnormalized) normal $\mathbf{g}(x,y)=\rho(x,y)\mathbf{n}(x,y)$, which combines albedo and geometry. Substituting~\eqref{eq:normalfrompq} into~\eqref{eq:imageformation} and stacking $m$ images for a fixed pixel gives the linear system:
+\begin{equation}
+\underbrace{\begin{bmatrix}
+\kappa_1 \mathbf{L}_1^T \\
+\vdots \\
+\kappa_m \mathbf{L}_m^T
+\end{bmatrix}}_{S \in \mathbb{R}^{m\times 3}} 
+\mathbf{g}(x,y) = \mathbf{I}(x,y), \qquad \mathbf{I}(x,y) = \begin{bmatrix}I_1(x,y) \\ \vdots \\ I_m(x,y)\end{bmatrix}
+\label{eq:pslinear}
+\end{equation}
+
+The factorization $\mathbf{g} = \rho\mathbf{n}$ makes the Lambertian assumption explicit: the \textit{direction} of $\mathbf{g}$ encodes the surface normal while its \textit{magnitude} equals the albedo. Recovering a unique solution requires $\text{rank}(S)=3$, i.e., at least three non-coplanar light directions.
+
+\paragraph{Pseudoinverse Solution.} The normal-albedo vector is estimated per pixel via the normal equations:
+\begin{equation}
+\mathbf{g}(x,y) = \underbrace{(S^TS)^{-1}S^T}_{S^+} \mathbf{I}(x,y)
+\label{eq:leastSquares}
+\end{equation}
+where $S^+$ denotes the Moore--Penrose pseudoinverse. The recovered unit normal and albedo follow immediately:
+\begin{align}
+\hat{\mathbf{n}}(x,y) &= \frac{\mathbf{g}(x,y)}{\|\mathbf{g}(x,y)\|_2} \\
+\hat{\rho}(x,y) &= \|\mathbf{g}(x,y)\|_2
+\end{align}
+
+\paragraph{Conditioning and Light Placement.} The condition number $\kappa(S)=\sigma_\text{max}(S)/\sigma_\text{min}(S)$ bounds the worst-case amplification of image noise into estimated normals. Light sources are therefore placed so that their directions span 3D space as uniformly as possible, maximizing $\sigma_\text{min}(S)$ and reducing noise sensitivity. In practice, $m>3$ images are used so that the system is overdetermined and robust to noise or saturation.
+
+\paragraph{Handling Shadows.} When some lights yield negative dot products (self-shadowing), the corresponding rows of $S$ and entries of $\mathbf{I}$ are dropped before solving~\eqref{eq:leastSquares}, preserving the least-squares derivation on the reduced system.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PLACEHOLDER: Section 2.2 - Gradient Integration via Poisson Equation
+
+\end{document}
+

@@ -171,7 +171,7 @@ Reverse engineering & Recovering geometry for CAD modeling \\
 
 However, photometric stereo does suffer from one critical constraint: the illumination sequence must be precisely controlled. As a result, it cannot be used effectively in uncontrolled environments such as UAVs or general-purpose robotics, which is why stereo cameras remain the de facto standard outside manufacturing despite their calibration sensitivity. Nevertheless, the fundamental challenge in photometric stereo still lies in \textit{integrating} noisy normal estimates into a globally consistent 3D surface, which requires solving a partial differential equation: the \textbf{Poisson equation}.
 
-\subsection{Comparison with Alternative 3D Reconstruction Methods}
+\subsection{Comparison with Alternative Methods}
 
 Table~\ref{tab:3d_methods_comparison} compares photometric stereo with other common 3D reconstruction techniques across key performance dimensions. The comparison highlights why photometric stereo is particularly well-suited for controlled industrial environments despite requiring specialized lighting infrastructure.
 
@@ -564,8 +564,130 @@ A_{mn} = -\frac{F_{mn}}{\lambda_{mn}}, \quad \text{where } F_{mn} = \frac{4}{L_x
 \end{equation}
 The coefficient $F_{mn}$ is the projection of the source term $f$ onto each eigenfunction. This is precisely what FFT-based solvers compute numerically: the Discrete Fourier Transform projects the discretized $f$ onto sinusoidal basis functions, and division by the eigenvalues $\lambda_{mn}$ yields the solution coefficients.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{Numerical Methods}
+
+Having established the mathematical framework for photometric stereo and gradient integration, we now turn to the numerical methods that enable practical computation. This chapter presents the techniques for converting the continuous Poisson equation into discrete systems that computers can solve efficiently.
+
+We begin with the fundamental discretization approach---converting continuous derivatives to finite differences on a grid. This lays the groundwork for understanding all subsequent solvers. We then present three distinct Poisson solvers, each with different boundary condition assumptions and computational trade-offs. Finally, we address regularization techniques for handling noisy real-world data.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of Chapter 2: Mathematical Foundation
+\subsection{From Continuous PDE to Discrete Grid}
+
+The continuous Poisson equation $\nabla^2 z = f$ cannot be solved directly by computers, which operate on discrete values. The finite difference method replaces continuous derivatives with algebraic approximations computed on a regular grid of sample points. This section derives these approximations and shows how they lead to a large linear system.
+
+\subsubsection{Approximating Derivatives (Taylor Series)}
+
+Consider a function $z(x)$ sampled on a uniform grid with spacing $h$. To approximate derivatives, we use Taylor series expansions about a point $x$:
+\begin{align}
+z(x+h) &= z(x) + h z'(x) + \frac{h^2}{2} z''(x) + \frac{h^3}{6} z'''(x) + \mathcal{O}(h^4) \\
+z(x-h) &= z(x) - h z'(x) + \frac{h^2}{2} z''(x) - \frac{h^3}{6} z'''(x) + \mathcal{O}(h^4)
+\end{align}
+Adding these two equations eliminates the odd-order terms:
+\begin{equation}
+z(x+h) + z(x-h) = 2z(x) + h^2 z''(x) + \mathcal{O}(h^4)
+\end{equation}
+Solving for the second derivative yields the central difference formula:
+\begin{equation}\label{eq:central_diff}
+z''(x) = \frac{z(x+h) - 2z(x) + z(x-h)}{h^2} + \mathcal{O}(h^2)
+\end{equation}
+This approximation is second-order accurate---the error decreases quadratically as the grid spacing $h$ is refined. On a discrete grid where $z_i = z(x_i)$, we write this as:
+\begin{equation}
+z''_i \approx \frac{z_{i+1} - 2z_i + z_{i-1}}{h^2}
+\end{equation}
+
+\subsubsection{The 5-Point Stencil Pattern}
+
+In two dimensions, the Laplacian combines second derivatives in both coordinate directions, capturing how the function curves in the $x$- and $y$-directions:
+\begin{equation}
+\nabla^2 z = \frac{\partial^2 z}{\partial x^2} + \frac{\partial^2 z}{\partial y^2}
+\end{equation}
+Applying the central difference formula~\eqref{eq:central_diff} in both directions at grid point $(i,j)$:
+\begin{equation}
+\nabla^2 z \bigg|_{i,j} \approx \frac{z_{i+1,j} - 2z_{i,j} + z_{i-1,j}}{(\Delta x)^2} + \frac{z_{i,j+1} - 2z_{i,j} + z_{i,j-1}}{(\Delta y)^2}
+\end{equation}
+For uniform spacing $h = \Delta x = \Delta y$, this simplifies to the 5-point stencil:
+\begin{equation}\label{eq:5pt_stencil}
+\boxed{\nabla^2 z \bigg|_{i,j} \approx \frac{z_{i+1,j} + z_{i-1,j} + z_{i,j+1} + z_{i,j-1} - 4z_{i,j}}{h^2}}
+\end{equation}
+
+The stencil pattern represents a local finite difference operator that combines values from the center point and its four nearest neighbors on the grid. Figure~\ref{fig:stencil} visualizes the coefficient structure:
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=0.8]
+\draw[fill=gray!20] (0,0) circle (0.4) node {$-4$};
+\draw[fill=blue!20] (1.5,0) circle (0.4) node {$+1$};
+\draw[fill=blue!20] (-1.5,0) circle (0.4) node {$+1$};
+\draw[fill=blue!20] (0,1.5) circle (0.4) node {$+1$};
+\draw[fill=blue!20] (0,-1.5) circle (0.4) node {$+1$};
+\draw[->] (0.4,0) -- (1.1,0);
+\draw[->] (-0.4,0) -- (-1.1,0);
+\draw[->] (0,0.4) -- (0,1.1);
+\draw[->] (0,-0.4) -- (0,-1.1);
+\node at (0,-2.3) {\small $(i,j)$ center point};
+\end{tikzpicture}
+\caption{The 5-point Laplacian stencil weights.}
+\label{fig:stencil}
+\end{figure}
+
+The stencil computes a weighted average of the four neighbors minus four times the center value, all divided by $h^2$. This approximates how the curvature (Laplacian) at a point relates to its deviation from the average of its neighbors.
+
+
+\subsubsection{Building the Linear System}
+
+To solve the Poisson equation numerically, we must convert the stencil operations into a single large linear system $A\mathbf{z} = \mathbf{f}$. This requires mapping the 2D grid to a 1D vector and translating neighbor relationships into matrix entries.
+
+Consider a simple $3 \times 3$ grid with 9 unknowns. Using row-major ordering, we assign linear index $k = i + j \cdot W$ where $W=3$ is the grid width:
+\begin{center}
+\begin{tikzpicture}[scale=1.2]
+\foreach \i in {0,1,2} {
+  \foreach \j in {0,1,2} {
+    \pgfmathtruncatemacro{\k}{\i + \j*3}
+    \draw (\i,2-\j) circle (0.35) node {$z_{\k}$};
+  }
+}
+\node at (-0.8,2) {$j=0$};
+\node at (-0.8,1) {$j=1$};
+\node at (-0.8,0) {$j=2$};
+\node at (0,-0.6) {$i=0$};
+\node at (1,-0.6) {$i=1$};
+\node at (2,-0.6) {$i=2$};
+\end{tikzpicture}
+\end{center}
+
+For an interior point like $z_4$ (at position $i=1, j=1$), the 5-point stencil couples it to its four neighbors:
+\begin{equation}
+\frac{z_5 + z_3 + z_7 + z_1 - 4z_4}{h^2} = f_4
+\end{equation}
+This becomes one row of the linear system. Rearranging with unknowns on the left:
+\begin{equation}
+\frac{1}{h^2}z_1 + \frac{1}{h^2}z_3 - \frac{4}{h^2}z_4 + \frac{1}{h^2}z_5 + \frac{1}{h^2}z_7 = f_4
+\end{equation}
+
+Writing this for all 9 grid points simultaneously yields the matrix equation $A\mathbf{z} = \mathbf{f}$. The matrix $A$ has a characteristic block structure:
+\begin{equation}
+A = \frac{1}{h^2}\begin{bmatrix}
+-4 & 1 & 0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+1 & -4 & 1 & 0 & 1 & 0 & 0 & 0 & 0 \\
+0 & 1 & -4 & 0 & 0 & 1 & 0 & 0 & 0 \\
+1 & 0 & 0 & -4 & 1 & 0 & 1 & 0 & 0 \\
+0 & 1 & 0 & 1 & -4 & 1 & 0 & 1 & 0 \\
+0 & 0 & 1 & 0 & 1 & -4 & 0 & 0 & 1 \\
+0 & 0 & 0 & 1 & 0 & 0 & -4 & 1 & 0 \\
+0 & 0 & 0 & 0 & 1 & 0 & 1 & -4 & 1 \\
+0 & 0 & 0 & 0 & 0 & 1 & 0 & 1 & -4
+\end{bmatrix}
+\end{equation}
+
+Each row corresponds to one grid point. The diagonal entry is $-4$ (center weight), entries at $\pm 1$ positions connect horizontal neighbors (same row), and entries at $\pm W$ positions connect vertical neighbors (adjacent rows). The matrix is sparse---only 5 entries per row instead of $N$---which is crucial for efficiency on large grids.
+
+Boundary conditions modify the right-hand side $\mathbf{f}$ or the matrix structure itself. For Dirichlet conditions, known boundary values move to the right-hand side. For Neumann conditions, stencil weights at boundaries are adjusted to enforce derivative constraints. The specific modifications are detailed in the solver sections that follow.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PLACEHOLDER: Section 3.2 - FFT-Based Solver
 
 \end{document}

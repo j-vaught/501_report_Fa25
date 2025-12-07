@@ -22,22 +22,27 @@ PROPOSED DOCUMENT STRUCTURE
        2.4.1 Eigenfunction Expansion
        2.4.2 Worked Example: Constant f(x,y)
 
-3. Numerical Methods (NEW - dedicated chapter for derivations)
-   3.1 Finite Difference Discretization
-       3.1.1 Taylor Series Derivation
-       3.1.2 5-Point Laplacian Stencil
-       3.1.3 Matrix Formulation Az = f
-       3.1.4 Handling Boundary Conditions
-   3.2 FFT-Based Spectral Solver
-       3.2.1 Fourier Transform Approach
-       3.2.2 Connection to Separation of Variables
-       3.2.3 Algorithm Description
-   3.3 Finite Difference Solvers
-       3.3.1 Dirichlet BC Solver
-       3.3.2 Neumann BC Solver
-   3.4 Regularization Methods
-       3.4.1 Tikhonov Regularization Derivation
-       3.4.2 Parameter Selection
+3. Numerical Methods
+   3.1 Continuous PDE to Discrete Grid Conversion
+       3.1.1 Approximating Derivatives (Taylor Series)
+       3.1.2 The 5-Point Stencil Pattern
+       3.1.3 Building the Linear System
+   3.2 Solver 1: FFT-Based (Spectral Method)
+       3.2.1 Mathematical Approach
+       3.2.2 Boundary Condition: Periodic
+       3.2.3 Algorithm Steps
+   3.3 Solver 2: Finite Difference (Dirichlet Boundaries)
+       3.3.1 Mathematical Approach
+       3.3.2 Boundary Condition: Fixed Values
+       3.3.3 Algorithm Steps
+   3.4 Solver 3: Finite Difference (Neumann Boundaries)
+       3.4.1 Mathematical Approach
+       3.4.2 Boundary Condition: Zero Flux  
+       3.4.3 Algorithm Steps
+   3.5 Regularization (Noise Handling)
+       3.5.1 Why Regularization is Needed
+       3.5.2 Tikhonov Derivation
+       3.5.3 Choosing the Parameter
 
 4. Implementation (simplified - just algorithms)
    4.1 Photometric Stereo Pipeline

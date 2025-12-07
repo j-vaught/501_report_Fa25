@@ -920,7 +920,7 @@ z_\lambda = \arg\min_z \left\{ \|\nabla^2 z - f\|^2 + \lambda \|z\|^2 \right\}
 \end{equation}
 The first term ensures the solution approximately satisfies the Poisson equation; the second term penalizes large height values. The parameter $\lambda > 0$ controls the trade-off: larger $\lambda$ produces smoother but less accurate solutions.
 
-Taking the first variation and setting it to zero yields the regularized normal equations:
+To find the minimizer, we take the first variation with respect to $z$ and set it to zero, applying the calculus of variations to the biharmonic operator that arises from composing the Laplacian with itself:
 \begin{equation}
 (\nabla^4 + \lambda I) z = \nabla^2 f
 \end{equation}
@@ -933,15 +933,62 @@ The regularization modifies the eigenvalue division: instead of dividing by $|\m
 
 \subsubsection{Choosing the Parameter}
 
-The regularization parameter $\lambda$ must balance bias against variance. Too small, and noise dominates; too large, and genuine surface features are smoothed away. Several methods exist for selecting $\lambda$:
+The regularization parameter $\lambda$ must balance bias against variance. Too small, and noise dominates; too large, and genuine surface features are smoothed away. We can quantify this trade-off by examining the regularized solution's behavior as a function of $\lambda$:
+\begin{equation}
+\hat{Z}_\lambda(\mathbf{k}) = \underbrace{\frac{|\mathbf{k}|^4}{|\mathbf{k}|^4 + \lambda}}_{\text{filter factor}} \cdot \hat{Z}_{\text{true}}(\mathbf{k}) + \text{noise contribution}
+\end{equation}
+The filter factor approaches 1 for $|\mathbf{k}|^4 \gg \lambda$ (high frequencies, no filtering) and approaches 0 for $|\mathbf{k}|^4 \ll \lambda$ (low frequencies, strong damping). Several methods exist for selecting $\lambda$.
 
-\textit{L-curve method.} Plot solution norm $\|z_\lambda\|$ versus residual norm $\|\nabla^2 z_\lambda - f\|$ for various $\lambda$. The optimal $\lambda$ lies at the ``corner'' of this L-shaped curve, balancing the two objectives. This method requires no knowledge of the noise level.
+\subsubsection{L-Curve Method}
 
-\textit{Discrepancy principle.} If the noise standard deviation $\sigma$ is known, choose $\lambda$ such that the residual norm equals the expected noise level: $\|\nabla^2 z_\lambda - f\| \approx \sigma \sqrt{N}$. This ensures we fit the data to within noise tolerance without overfitting.
+The L-curve method provides a graphical approach to parameter selection that does not require prior knowledge of the noise level. For each candidate $\lambda$, we compute both the residual norm (how well the solution fits the data) and the solution norm (how smooth the solution is), plotting them parametrically:
+\begin{equation}
+\text{L-curve}: \quad \left( \log \|\nabla^2 z_\lambda - f\|, \; \log \|z_\lambda\| \right) \quad \text{for } \lambda \in [\lambda_{\min}, \lambda_{\max}]
+\end{equation}
 
-\textit{Cross-validation.} Hold out a subset of measurements, fit to the remainder, and evaluate prediction error on the held-out set. The $\lambda$ minimizing prediction error generalizes best.
+The resulting curve typically has an L-shape: for small $\lambda$ (under-regularization), the residual is small but the solution norm is large (noisy); for large $\lambda$ (over-regularization), the solution is smooth but the residual is large. The optimal $\lambda$ lies at the ``corner'' of this L-shaped curve, where the curvature:
+\begin{equation}
+\kappa(\lambda) = \frac{\rho'(\lambda) \eta''(\lambda) - \rho''(\lambda) \eta'(\lambda)}{(\rho'^2 + \eta'^2)^{3/2}}
+\end{equation}
+is maximized, where $\rho(\lambda) = \log \|\nabla^2 z_\lambda - f\|$ and $\eta(\lambda) = \log \|z_\lambda\|$. This corner represents the best trade-off between fitting the data and obtaining a smooth solution.
+
+\subsubsection{Discrepancy Principle}
+
+When the noise statistics are known or can be estimated, the discrepancy principle provides a principled approach to parameter selection. The key idea is that we should not fit the data more accurately than the noise allows---doing so means we are fitting noise rather than signal.
+
+If the noise standard deviation is $\sigma$ and there are $N$ data points, the expected squared norm of the noise is $N\sigma^2$. We choose $\lambda$ such that the residual matches this expected noise level:
+\begin{equation}
+\|\nabla^2 z_\lambda - f\|^2 \approx N \sigma^2
+\end{equation}
+
+In practice, we solve for $\lambda$ by monotonically decreasing $\lambda$ from a large value until the residual first drops below the threshold $\tau = \sigma \sqrt{N}$. A safety factor is sometimes included:
+\begin{equation}
+\|\nabla^2 z_\lambda - f\| \leq \tau \cdot \delta, \quad \delta \in [1, 2]
+\end{equation}
+The discrepancy principle is particularly useful when the noise level can be estimated from the data itself, such as from flat regions of the image or from repeated measurements.
+
+\subsubsection{Cross-Validation}
+
+Cross-validation uses data splitting to estimate how well a particular $\lambda$ will generalize to unseen data. This approach is especially valuable when the noise characteristics are unknown or non-Gaussian.
+
+Partition the data into $K$ folds (typically $K = 5$ or $K = 10$). For each fold $k$, hold out that portion of the data, fit the regularized solution $z_\lambda^{(-k)}$ using the remaining data, and compute the prediction error on the held-out set:
+\begin{equation}
+\text{CV}(\lambda) = \frac{1}{K} \sum_{k=1}^{K} \|z_\lambda^{(-k)} - z_{\text{test}}^{(k)}\|^2
+\end{equation}
+Select the regularization parameter that minimizes the cross-validation error:
+\begin{equation}
+\lambda^* = \arg\min_\lambda \text{CV}(\lambda)
+\end{equation}
+
+Leave-one-out cross-validation (LOOCV, $K = N$) provides an unbiased estimate but is computationally expensive. Generalized cross-validation (GCV) provides an efficient approximation for linear problems:
+\begin{equation}
+\text{GCV}(\lambda) = \frac{\|\nabla^2 z_\lambda - f\|^2 / N}{(1 - \text{tr}(A_\lambda)/N)^2}
+\end{equation}
+where $A_\lambda$ is the influence matrix mapping data to predictions.
 
 In practice for photometric stereo, a reasonable starting point is $\lambda \approx 10^{-4}$ to $10^{-2}$, adjusted visually based on the smoothness of the reconstructed surface.
+
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

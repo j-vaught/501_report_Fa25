@@ -1,0 +1,475 @@
+{
+  "user": "j-vaught",
+  "repos": [
+    "j-vaught/501_report_Fa25",
+    "j-vaught/graduate-coursework",
+    "j-vaught/Java-Chess-Game",
+    "j-vaught/KRISP-U",
+    "j-vaught/Machine-Learning_EMCH368",
+    "j-vaught/MO-CAP",
+    "j-vaught/vrifa",
+    "IMSEL-Lab/annotator_RUST",
+    "IMSEL-Lab/Dual_FLIR_cpp_multi-stage",
+    "IMSEL-Lab/flir-m364c-realtime-controller",
+    "IMSEL-Lab/furuno-radar-pattern-generator",
+    "IMSEL-Lab/furuno_csv_to_ppi_converter_cpp",
+    "IMSEL-Lab/imu-camera-ortho",
+    "IMSEL-Lab/m300-dual-camera-driver",
+    "IMSEL-Lab/m300-flir-control-driver",
+    "IMSEL-Lab/m300-flir-video-driver",
+    "IMSEL-Lab/old_camer_flir_JW",
+    "IMSEL-Lab/RADAR",
+    "IMSEL-Lab/RadarEchoTrails",
+    "IMSEL-Lab/RadarPlotter",
+    "IMSEL-Lab/RADAR_GUI-Web",
+    "IMSEL-Lab/RADAR_web",
+    "IMSEL-Lab/working_slew_to_cue_dual_script",
+    "IMSEL-Lab/yolov12n_rust"
+  ],
+  "generated_utc": "2025-12-07T20:20:16.344756Z",
+  "skip_repos": [
+    "temp_code"
+  ],
+  "ignore_languages": [
+    "JSON"
+  ],
+  "vendor_paths_ignored": [
+    "sample/myenv"
+  ],
+  "all_time": {
+    "add": 428018,
+    "del": 75756
+  },
+  "monthly": {
+    "2025-12": {
+      "add": 144365,
+      "del": 21907
+    },
+    "2025-07": {
+      "add": 1053,
+      "del": 37328
+    },
+    "2023-05": {
+      "add": 42,
+      "del": 1
+    },
+    "2024-03": {
+      "add": 2121,
+      "del": 302
+    },
+    "2023-08": {
+      "add": 138,
+      "del": 0
+    },
+    "2023-03": {
+      "add": 314,
+      "del": 0
+    },
+    "2025-11": {
+      "add": 104787,
+      "del": 8466
+    },
+    "2025-10": {
+      "add": 5296,
+      "del": 782
+    },
+    "2025-09": {
+      "add": 361,
+      "del": 19
+    },
+    "2025-08": {
+      "add": 2699,
+      "del": 16
+    },
+    "2024-12": {
+      "add": 4692,
+      "del": 1400
+    },
+    "2024-07": {
+      "add": 2212,
+      "del": 1069
+    },
+    "2024-06": {
+      "add": 89782,
+      "del": 87
+    },
+    "2025-06": {
+      "add": 42914,
+      "del": 2339
+    },
+    "2024-11": {
+      "add": 25045,
+      "del": 1148
+    },
+    "2024-10": {
+      "add": 1108,
+      "del": 75
+    },
+    "2024-09": {
+      "add": 1089,
+      "del": 817
+    }
+  },
+  "yearly": {
+    "2025": {
+      "add": 301475,
+      "del": 70857
+    },
+    "2023": {
+      "add": 494,
+      "del": 1
+    },
+    "2024": {
+      "add": 126049,
+      "del": 4898
+    }
+  },
+  "language_total": {
+    "LaTeX": 8297,
+    "Text": 42490,
+    "Other": 4439,
+    "Log": 3308,
+    "Python": 9334,
+    "Markdown": 16888,
+    "Objective-C": 562,
+    "CSV": 4600,
+    "YAML": 92,
+    "Rust": 13340,
+    "Slint": 31397,
+    "Lock": 22149,
+    "TOML": 128,
+    "Shell": 529,
+    "C++": 123445,
+    "JavaScript": 10355,
+    "HTML": 71576,
+    "CSS": 6342,
+    "C/C++": 35334,
+    "C": 23409,
+    "TypeScript": 4
+  },
+  "language_monthly": {
+    "2023-03": {
+      "Python": 293,
+      "Other": 21
+    },
+    "2023-05": {
+      "Markdown": 42
+    },
+    "2023-08": {
+      "Python": 138
+    },
+    "2024-03": {
+      "Other": 98,
+      "Objective-C": 562,
+      "CSV": 1461
+    },
+    "2024-06": {
+      "Other": 323,
+      "C++": 9402,
+      "C/C++": 2058,
+      "Markdown": 501,
+      "Text": 8,
+      "HTML": 68707,
+      "JavaScript": 6334,
+      "CSS": 2449
+    },
+    "2024-07": {
+      "Markdown": 7,
+      "Python": 1342,
+      "Other": 92,
+      "C/C++": 11,
+      "C++": 760
+    },
+    "2024-09": {
+      "Python": 565,
+      "Other": 93,
+      "C++": 404,
+      "C/C++": 27
+    },
+    "2024-10": {
+      "C++": 1094,
+      "C/C++": 14
+    },
+    "2024-11": {
+      "C++": 24439,
+      "C/C++": 265,
+      "HTML": 277,
+      "Other": 36,
+      "Text": 28
+    },
+    "2024-12": {
+      "Markdown": 122,
+      "Other": 74,
+      "C++": 3171,
+      "C/C++": 1325,
+      "Text": 0,
+      "Python": 0,
+      "HTML": 0
+    },
+    "2025-06": {
+      "Python": 0,
+      "Other": 137,
+      "C++": 35752,
+      "HTML": 621,
+      "Shell": 41,
+      "JavaScript": 161,
+      "CSS": 293,
+      "Markdown": 234,
+      "Text": 125,
+      "C/C++": 5550
+    },
+    "2025-07": {
+      "Markdown": 252,
+      "HTML": 38,
+      "Shell": 1,
+      "C++": 426,
+      "CSS": 293,
+      "Other": 22,
+      "C/C++": 0,
+      "Text": 0,
+      "JavaScript": 21
+    },
+    "2025-08": {
+      "Python": 1310,
+      "JavaScript": 280,
+      "HTML": 636,
+      "Other": 352,
+      "Shell": 64,
+      "Markdown": 10,
+      "C++": 47
+    },
+    "2025-09": {
+      "Python": 344,
+      "Markdown": 17
+    },
+    "2025-10": {
+      "HTML": 771,
+      "JavaScript": 1303,
+      "CSS": 1506,
+      "Python": 969,
+      "CSV": 38,
+      "C++": 709
+    },
+    "2025-11": {
+      "Markdown": 4107,
+      "Text": 39579,
+      "YAML": 61,
+      "Python": 2751,
+      "Other": 1736,
+      "C++": 43092,
+      "JavaScript": 2256,
+      "HTML": 526,
+      "CSS": 1801,
+      "C/C++": 4343,
+      "Shell": 190,
+      "C": 803,
+      "Log": 437,
+      "TypeScript": 4,
+      "CSV": 3101
+    },
+    "2025-12": {
+      "LaTeX": 8297,
+      "Text": 2750,
+      "Other": 1455,
+      "Log": 2871,
+      "Python": 1622,
+      "Markdown": 11596,
+      "Rust": 13340,
+      "Slint": 31397,
+      "YAML": 31,
+      "Lock": 22149,
+      "TOML": 128,
+      "Shell": 233,
+      "C/C++": 21741,
+      "C": 22606,
+      "C++": 4149
+    }
+  },
+  "repo_language": {
+    "j-vaught/501_report_Fa25": {
+      "LaTeX": 2802,
+      "Text": 213,
+      "Other": 180,
+      "Log": 2204,
+      "Python": 1297
+    },
+    "j-vaught/graduate-coursework": {
+      "LaTeX": 5495
+    },
+    "j-vaught/Java-Chess-Game": {
+      "Markdown": 30
+    },
+    "j-vaught/Machine-Learning_EMCH368": {
+      "Other": 98,
+      "Objective-C": 562,
+      "CSV": 1461
+    },
+    "j-vaught/MO-CAP": {
+      "Python": 431,
+      "Markdown": 20,
+      "Other": 21
+    },
+    "j-vaught/vrifa": {
+      "Markdown": 223,
+      "Text": 147,
+      "YAML": 61,
+      "Python": 1365,
+      "Other": 4
+    },
+    "IMSEL-Lab/annotator_RUST": {
+      "Markdown": 2932,
+      "Rust": 7156,
+      "Slint": 12369,
+      "YAML": 20,
+      "Other": 217,
+      "Log": 667,
+      "Lock": 6794,
+      "TOML": 62,
+      "Text": 17,
+      "Shell": 141
+    },
+    "IMSEL-Lab/Dual_FLIR_cpp_multi-stage": {
+      "Markdown": 650,
+      "Text": 174,
+      "C++": 27674,
+      "Python": 490,
+      "Other": 41,
+      "JavaScript": 93,
+      "HTML": 56,
+      "CSS": 151
+    },
+    "IMSEL-Lab/flir-m364c-realtime-controller": {
+      "Markdown": 1377,
+      "CSS": 808,
+      "C++": 5361,
+      "C/C++": 1402,
+      "JavaScript": 794,
+      "HTML": 242,
+      "Text": 126,
+      "Shell": 32,
+      "Other": 2
+    },
+    "IMSEL-Lab/furuno-radar-pattern-generator": {
+      "HTML": 232,
+      "JavaScript": 607,
+      "CSS": 936
+    },
+    "IMSEL-Lab/furuno_csv_to_ppi_converter_cpp": {
+      "Markdown": 921,
+      "Other": 35,
+      "Text": 38456,
+      "C++": 3476,
+      "JavaScript": 360,
+      "Python": 805,
+      "Shell": 65
+    },
+    "IMSEL-Lab/imu-camera-ortho": {
+      "Other": 811,
+      "Text": 270,
+      "Markdown": 7139,
+      "C/C++": 21741,
+      "C": 22606,
+      "C++": 4149
+    },
+    "IMSEL-Lab/m300-dual-camera-driver": {
+      "Other": 2,
+      "Markdown": 527,
+      "Text": 86,
+      "Shell": 93,
+      "C++": 3703,
+      "C/C++": 1217,
+      "JavaScript": 633,
+      "HTML": 204,
+      "CSS": 771
+    },
+    "IMSEL-Lab/m300-flir-control-driver": {
+      "Other": 12,
+      "Text": 47,
+      "Markdown": 353,
+      "C++": 1159
+    },
+    "IMSEL-Lab/m300-flir-video-driver": {
+      "Markdown": 264,
+      "Text": 543,
+      "Python": 91,
+      "C++": 1578,
+      "Other": 1628,
+      "C": 803,
+      "Log": 437,
+      "TypeScript": 4
+    },
+    "IMSEL-Lab/old_camer_flir_JW": {
+      "Markdown": 73,
+      "Python": 2623,
+      "CSV": 38,
+      "JavaScript": 290,
+      "HTML": 632,
+      "Other": 352,
+      "Shell": 64
+    },
+    "IMSEL-Lab/RADAR": {
+      "Markdown": 495,
+      "Other": 301,
+      "C++": 4701,
+      "C/C++": 1029,
+      "Text": 4,
+      "HTML": 68707,
+      "JavaScript": 6334,
+      "CSS": 2449
+    },
+    "IMSEL-Lab/RadarEchoTrails": {
+      "TOML": 24,
+      "Markdown": 410,
+      "Rust": 1056,
+      "Slint": 10522,
+      "Other": 94,
+      "Lock": 6728
+    },
+    "IMSEL-Lab/RadarPlotter": {
+      "TOML": 25,
+      "Markdown": 310,
+      "Rust": 1297,
+      "Other": 136,
+      "Slint": 8506,
+      "Lock": 6824
+    },
+    "IMSEL-Lab/RADAR_GUI-Web": {
+      "Python": 1907,
+      "Other": 317,
+      "C++": 34569,
+      "C/C++": 2671,
+      "Text": 32,
+      "Markdown": 135,
+      "HTML": 277
+    },
+    "IMSEL-Lab/RADAR_web": {
+      "HTML": 1226,
+      "JavaScript": 1244,
+      "CSS": 1227,
+      "C++": 36934,
+      "Markdown": 495,
+      "Shell": 42,
+      "Other": 159,
+      "C/C++": 5550,
+      "Text": 125
+    },
+    "IMSEL-Lab/working_slew_to_cue_dual_script": {
+      "Markdown": 55,
+      "CSV": 3101,
+      "Other": 12,
+      "C++": 141,
+      "C/C++": 1724
+    },
+    "IMSEL-Lab/yolov12n_rust": {
+      "Other": 17,
+      "Shell": 92,
+      "Markdown": 479,
+      "Rust": 3831,
+      "Python": 325,
+      "YAML": 11,
+      "Lock": 1803,
+      "TOML": 17,
+      "Text": 2250
+    }
+  }
+}

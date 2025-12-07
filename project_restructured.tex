@@ -76,6 +76,9 @@
 \titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
 \titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
 
+% Math operators
+\DeclareMathOperator*{\argmin}{arg\,min}
+
 \title{\LARGE\bfseries 3D Surface Reconstruction via the Photometric Stereo Method}
 
 \author{JC Vaught and Ty Dangerfield \\ Department of Mechanical Engineering, University of South Carolina}
@@ -299,33 +302,131 @@ Equation~\eqref{eq:normalfrompq} explicitly links the integrable gradient field 
 
 \subsubsection{Least-Squares Normal Recovery}
 
-Define the scaled (unnormalized) normal $\mathbf{g}(x,y)=\rho(x,y)\mathbf{n}(x,y)$, which combines albedo and geometry. Substituting~\eqref{eq:normalfrompq} into~\eqref{eq:imageformation} and stacking $m$ images for a fixed pixel gives the linear system:
+Having established the relationship between surface normals and image intensities, we now formulate the inverse problem: given multiple images under different illumination, recover the surface normal at each pixel.
+
+\paragraph{The Linear System Formulation.} 
+
+We introduce the scaled normal vector $\mathbf{g}(x,y) = \rho(x,y)\mathbf{n}(x,y)$, which combines the geometric information (normal direction) with the material property (albedo). This factorization is convenient because $\mathbf{g}$ appears linearly in the image formation equation.
+
+Substituting the Lambertian reflectance model~\eqref{eq:normalfrompq} into the image formation equation~\eqref{eq:imageformation}, we obtain for a single light source $i$:
+\begin{equation}
+I_i(x,y) = \kappa_i \mathbf{L}_i^T \mathbf{g}(x,y)
+\end{equation}
+where we have absorbed the $\max$ operator into the formulation (assuming no self-shadowing for now; we address this later). This is a scalar equation linear in $\mathbf{g}$.
+
+For $m$ different light sources, we obtain $m$ such equations at each pixel. Stacking these into a single matrix equation yields:
 \begin{equation}
 \underbrace{\begin{bmatrix}
+I_1(x,y) \\
+I_2(x,y) \\
+\vdots \\
+I_m(x,y)
+\end{bmatrix}}_{\mathbf{I}(x,y) \in \mathbb{R}^m}
+=
+\underbrace{\begin{bmatrix}
 \kappa_1 \mathbf{L}_1^T \\
+\kappa_2 \mathbf{L}_2^T \\
 \vdots \\
 \kappa_m \mathbf{L}_m^T
-\end{bmatrix}}_{S \in \mathbb{R}^{m\times 3}} 
-\mathbf{g}(x,y) = \mathbf{I}(x,y), \qquad \mathbf{I}(x,y) = \begin{bmatrix}I_1(x,y) \\ \vdots \\ I_m(x,y)\end{bmatrix}
+\end{bmatrix}}_{S \in \mathbb{R}^{m\times 3}}
+\underbrace{\mathbf{g}(x,y)}_{\in \mathbb{R}^3}
+\end{equation}
+
+Compactly, we write:
+\begin{equation}
+S \mathbf{g}(x,y) = \mathbf{I}(x,y)
 \label{eq:pslinear}
 \end{equation}
 
-The factorization $\mathbf{g} = \rho\mathbf{n}$ makes the Lambertian assumption explicit: the \textit{direction} of $\mathbf{g}$ encodes the surface normal while its \textit{magnitude} equals the albedo. Recovering a unique solution requires $\text{rank}(S)=3$, i.e., at least three non-coplanar light directions.
+The matrix $S$ is called the \textit{illumination matrix} and depends only on the known light directions and calibration factors. The vector $\mathbf{I}(x,y)$ contains the observed intensities. Our goal is to solve for $\mathbf{g}(x,y)$ at every pixel.
 
-\paragraph{Pseudoinverse Solution.} The normal-albedo vector is estimated per pixel via the normal equations:
+For a unique solution to exist, $S$ must have full column rank: $\text{rank}(S) = 3$. This requires at least three images ($m \geq 3$) with non-coplanar light directions. In practice, we use $m > 3$ to obtain an overdetermined system, which provides robustness against noise.
+
+\paragraph{Least-Squares Solution via Pseudoinverse.}
+
+When $m > 3$, the system~\eqref{eq:pslinear} is overdetermined and generally has no exact solution due to measurement noise. We instead seek the least-squares solution that minimizes the residual:
 \begin{equation}
-\mathbf{g}(x,y) = \underbrace{(S^TS)^{-1}S^T}_{S^+} \mathbf{I}(x,y)
+\hat{\mathbf{g}}(x,y) = \argmin_{\mathbf{g}} \|S\mathbf{g} - \mathbf{I}(x,y)\|_2^2
+\end{equation}
+
+Expanding the objective function:
+\begin{equation}
+\|S\mathbf{g} - \mathbf{I}\|_2^2 = (S\mathbf{g} - \mathbf{I})^T(S\mathbf{g} - \mathbf{I}) = \mathbf{g}^T S^T S \mathbf{g} - 2\mathbf{I}^T S \mathbf{g} + \mathbf{I}^T\mathbf{I}
+\end{equation}
+
+Taking the gradient with respect to $\mathbf{g}$ and setting it to zero yields the \textit{normal equations}:
+\begin{equation}
+\nabla_{\mathbf{g}} \|S\mathbf{g} - \mathbf{I}\|_2^2 = 2S^TS\mathbf{g} - 2S^T\mathbf{I} = 0 \quad \Rightarrow \quad S^TS\mathbf{g} = S^T\mathbf{I}
+\end{equation}
+
+Assuming $S$ has full column rank, $S^TS$ is invertible, and we obtain:
+\begin{equation}
+\mathbf{g}(x,y) = \underbrace{(S^TS)^{-1}S^T}_{S^+ \text{ (pseudoinverse)}} \mathbf{I}(x,y)
 \label{eq:leastSquares}
 \end{equation}
-where $S^+$ denotes the Moore--Penrose pseudoinverse. The recovered unit normal and albedo follow immediately:
+
+The matrix $S^+ = (S^TS)^{-1}S^T$ is the Moore--Penrose pseudoinverse of $S$. This solution minimizes the $L^2$ norm of the residual and is unique when $\text{rank}(S) = 3$.
+
+Once $\mathbf{g}(x,y)$ is computed, we recover the unit normal and albedo by exploiting the factorization $\mathbf{g} = \rho\mathbf{n}$:
 \begin{align}
-\hat{\mathbf{n}}(x,y) &= \frac{\mathbf{g}(x,y)}{\|\mathbf{g}(x,y)\|_2} \\
-\hat{\rho}(x,y) &= \|\mathbf{g}(x,y)\|_2
+\hat{\rho}(x,y) &= \|\mathbf{g}(x,y)\|_2 \\
+\hat{\mathbf{n}}(x,y) &= \frac{\mathbf{g}(x,y)}{\|\mathbf{g}(x,y)\|_2}
 \end{align}
 
-\paragraph{Conditioning and Light Placement.} The condition number $\kappa(S)=\sigma_\text{max}(S)/\sigma_\text{min}(S)$ bounds the worst-case amplification of image noise into estimated normals. Light sources are therefore placed so that their directions span 3D space as uniformly as possible, maximizing $\sigma_\text{min}(S)$ and reducing noise sensitivity. In practice, $m>3$ images are used so that the system is overdetermined and robust to noise or saturation.
+The \textit{direction} of $\mathbf{g}$ encodes the surface normal while its \textit{magnitude} equals the albedo.
 
-\paragraph{Handling Shadows.} When some lights yield negative dot products (self-shadowing), the corresponding rows of $S$ and entries of $\mathbf{I}$ are dropped before solving~\eqref{eq:leastSquares}, preserving the least-squares derivation on the reduced system.
+\paragraph{Conditioning and Noise Sensitivity.}
+
+The accuracy of the recovered normals depends critically on the \textit{condition number} of $S$:
+\begin{equation}
+\kappa(S) = \frac{\sigma_{\max}(S)}{\sigma_{\min}(S)}
+\end{equation}
+where $\sigma_{\max}$ and $\sigma_{\min}$ are the largest and smallest singular values of $S$, respectively.
+
+To understand the impact of conditioning, consider the singular value decomposition (SVD) of $S$:
+\begin{equation}
+S = U\Sigma V^T
+\end{equation}
+where $U \in \mathbb{R}^{m \times 3}$ and $V \in \mathbb{R}^{3 \times 3}$ are orthogonal matrices, and $\Sigma = \text{diag}(\sigma_1, \sigma_2, \sigma_3)$ contains the singular values in descending order.
+
+The pseudoinverse can be expressed as:
+\begin{equation}
+S^+ = V\Sigma^{-1}U^T
+\end{equation}
+
+If the measured intensities contain noise $\Delta \mathbf{I}$ such that $\|\Delta \mathbf{I}\| / \|\mathbf{I}\| = \epsilon$, the relative error in the recovered $\mathbf{g}$ is bounded by:
+\begin{equation}
+\frac{\|\Delta \mathbf{g}\|}{\|\mathbf{g}\|} \leq \kappa(S) \cdot \epsilon
+\end{equation}
+
+This shows that the condition number $\kappa(S)$ controls the worst-case amplification of measurement noise. A large condition number indicates that small errors in $\mathbf{I}$ can lead to large errors in $\mathbf{g}$.
+
+\textbf{Optimal Light Placement:} To minimize noise sensitivity, we seek to minimize $\kappa(S)$, or equivalently, maximize $\sigma_{\min}(S)$. This is achieved when the light directions $\{\mathbf{L}_i\}$ are as uniformly distributed as possible over the unit sphere, ensuring that the columns of $S$ span $\mathbb{R}^3$ evenly. In practice, lights are often arranged in a hemispherical configuration with uniform azimuthal and elevation spacing.
+
+\textbf{Overdetermined Systems:} Using $m > 3$ images provides two benefits: (1) the least-squares solution averages out random noise, and (2) the system becomes more robust to individual measurements corrupted by saturation or outliers.
+
+\paragraph{Shadow Handling and Robust Estimation.}
+
+The linear system~\eqref{eq:pslinear} assumes that all lights illuminate the surface from the front ($\mathbf{n} \cdot \mathbf{L}_i > 0$). When a light source illuminates from behind, \textit{self-shadowing} occurs, and the image formation equation becomes:
+\begin{equation}
+I_i(x,y) = 0 \quad \text{if } \mathbf{n}(x,y) \cdot \mathbf{L}_i < 0
+\end{equation}
+
+These shadowed measurements violate the linear model and must be excluded. The standard approach is:
+\begin{enumerate}
+\item For each pixel, identify light sources $i$ for which $I_i(x,y) \approx 0$ (or below a threshold).
+\item Remove the corresponding rows from $S$ and entries from $\mathbf{I}(x,y)$.
+\item Solve the reduced least-squares problem on the remaining (valid) measurements.
+\end{enumerate}
+
+This row deletion strategy preserves the least-squares structure and ensures that only valid measurements contribute to the normal estimate. However, it requires at least three non-shadowed lights at every pixel to maintain $\text{rank}(S) = 3$.
+
+\textbf{Alternative: Weighted Least Squares.} For pixels near shadow boundaries where intensities are low but non-zero, a weighted least-squares approach can be used:
+\begin{equation}
+\hat{\mathbf{g}} = \argmin_{\mathbf{g}} \sum_{i=1}^m w_i (I_i - \kappa_i \mathbf{L}_i^T \mathbf{g})^2
+\end{equation}
+where weights $w_i$ are set based on confidence (e.g., $w_i = \max(0, \mathbf{n} \cdot \mathbf{L}_i)$ or based on intensity magnitude). This provides a smooth transition between fully illuminated and shadowed regions.
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

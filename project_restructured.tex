@@ -300,11 +300,9 @@ To obtain a unit normal vector (required for computing the geometric factor $\ma
 
 Equation~\eqref{eq:normalfrompq} explicitly links the integrable gradient field $(p,q)$ to the observed shading---this is the key relationship that enables gradient recovery from images.
 
-\subsubsection{Least-Squares Normal Recovery}
+\subsubsection{The Linear System Formulation}
 
 Having established the relationship between surface normals and image intensities, we now formulate the inverse problem: given multiple images under different illumination, recover the surface normal at each pixel.
-
-\paragraph{The Linear System Formulation.} 
 
 We introduce the scaled normal vector $\mathbf{g}(x,y) = \rho(x,y)\mathbf{n}(x,y)$, which combines the geometric information (normal direction) with the material property (albedo). This factorization is convenient because $\mathbf{g}$ appears linearly in the image formation equation.
 
@@ -338,99 +336,114 @@ S \mathbf{g}(x,y) = \mathbf{I}(x,y)
 \label{eq:pslinear}
 \end{equation}
 
-The matrix $S$ is called the \textit{illumination matrix} and depends only on the known light directions and calibration factors. The vector $\mathbf{I}(x,y)$ contains the observed intensities. Our goal is to solve for $\mathbf{g}(x,y)$ at every pixel.
+The matrix $S$ is called the \textit{illumination matrix} and depends only on the known light directions and calibration factors. The vector $\mathbf{I}(x,y)$ contains the observed intensities, and our goal is to solve for $\mathbf{g}(x,y)$ at every pixel. For a unique solution to exist, $S$ must have full column rank: $\text{rank}(S) = 3$. This requires at least three images ($m \geq 3$) with non-coplanar light directions. In practice, we use $m > 3$ to obtain an overdetermined system, which provides robustness against noise.
 
-For a unique solution to exist, $S$ must have full column rank: $\text{rank}(S) = 3$. This requires at least three images ($m \geq 3$) with non-coplanar light directions. In practice, we use $m > 3$ to obtain an overdetermined system, which provides robustness against noise.
-
-\paragraph{Least-Squares Solution via Pseudoinverse.}
+\subsubsection{Least-Squares Solution via Pseudoinverse}
 
 When $m > 3$, the system~\eqref{eq:pslinear} is overdetermined and generally has no exact solution due to measurement noise. We instead seek the least-squares solution that minimizes the residual:
 \begin{equation}
 \hat{\mathbf{g}}(x,y) = \argmin_{\mathbf{g}} \|S\mathbf{g} - \mathbf{I}(x,y)\|_2^2
 \end{equation}
-
 Expanding the objective function:
 \begin{equation}
 \|S\mathbf{g} - \mathbf{I}\|_2^2 = (S\mathbf{g} - \mathbf{I})^T(S\mathbf{g} - \mathbf{I}) = \mathbf{g}^T S^T S \mathbf{g} - 2\mathbf{I}^T S \mathbf{g} + \mathbf{I}^T\mathbf{I}
 \end{equation}
-
 Taking the gradient with respect to $\mathbf{g}$ and setting it to zero yields the \textit{normal equations}:
 \begin{equation}
 \nabla_{\mathbf{g}} \|S\mathbf{g} - \mathbf{I}\|_2^2 = 2S^TS\mathbf{g} - 2S^T\mathbf{I} = 0 \quad \Rightarrow \quad S^TS\mathbf{g} = S^T\mathbf{I}
 \end{equation}
-
 Assuming $S$ has full column rank, $S^TS$ is invertible, and we obtain:
 \begin{equation}
 \mathbf{g}(x,y) = \underbrace{(S^TS)^{-1}S^T}_{S^+ \text{ (pseudoinverse)}} \mathbf{I}(x,y)
 \label{eq:leastSquares}
 \end{equation}
-
-The matrix $S^+ = (S^TS)^{-1}S^T$ is the Moore--Penrose pseudoinverse of $S$. This solution minimizes the $L^2$ norm of the residual and is unique when $\text{rank}(S) = 3$.
-
-Once $\mathbf{g}(x,y)$ is computed, we recover the unit normal and albedo by exploiting the factorization $\mathbf{g} = \rho\mathbf{n}$:
+The matrix $S^+ = (S^TS)^{-1}S^T$ is the Moore--Penrose pseudoinverse of $S$. This solution minimizes the $L^2$ norm of the residual and is unique when $\text{rank}(S) = 3$. Once $\mathbf{g}(x,y)$ is computed, we recover the unit normal and albedo by exploiting the factorization $\mathbf{g} = \rho\mathbf{n}$:
 \begin{align}
 \hat{\rho}(x,y) &= \|\mathbf{g}(x,y)\|_2 \\
 \hat{\mathbf{n}}(x,y) &= \frac{\mathbf{g}(x,y)}{\|\mathbf{g}(x,y)\|_2}
 \end{align}
-
 The \textit{direction} of $\mathbf{g}$ encodes the surface normal while its \textit{magnitude} equals the albedo.
 
-\paragraph{Conditioning and Noise Sensitivity.}
+\subsubsection{Conditioning and Noise Sensitivity}
 
 The accuracy of the recovered normals depends critically on the \textit{condition number} of $S$:
 \begin{equation}
 \kappa(S) = \frac{\sigma_{\max}(S)}{\sigma_{\min}(S)}
 \end{equation}
-where $\sigma_{\max}$ and $\sigma_{\min}$ are the largest and smallest singular values of $S$, respectively.
-
-To understand the impact of conditioning, consider the singular value decomposition (SVD) of $S$:
+where $\sigma_{\max}$ and $\sigma_{\min}$ are the largest and smallest singular values of $S$, respectively. To understand the impact of conditioning, consider the singular value decomposition (SVD) of $S$:
 \begin{equation}
 S = U\Sigma V^T
 \end{equation}
-where $U \in \mathbb{R}^{m \times 3}$ and $V \in \mathbb{R}^{3 \times 3}$ are orthogonal matrices, and $\Sigma = \text{diag}(\sigma_1, \sigma_2, \sigma_3)$ contains the singular values in descending order.
-
-The pseudoinverse can be expressed as:
+where $U \in \mathbb{R}^{m \times 3}$ and $V \in \mathbb{R}^{3 \times 3}$ are orthogonal matrices, and $\Sigma = \text{diag}(\sigma_1, \sigma_2, \sigma_3)$ contains the singular values in descending order. The pseudoinverse can be expressed as:
 \begin{equation}
 S^+ = V\Sigma^{-1}U^T
 \end{equation}
-
 If the measured intensities contain noise $\Delta \mathbf{I}$ such that $\|\Delta \mathbf{I}\| / \|\mathbf{I}\| = \epsilon$, the relative error in the recovered $\mathbf{g}$ is bounded by:
 \begin{equation}
 \frac{\|\Delta \mathbf{g}\|}{\|\mathbf{g}\|} \leq \kappa(S) \cdot \epsilon
 \end{equation}
+This shows that the condition number $\kappa(S)$ controls the worst-case amplification of measurement noise. A large condition number indicates that small errors in $\mathbf{I}$ can lead to large errors in $\mathbf{g}$. To minimize noise sensitivity, we seek to minimize $\kappa(S)$, or equivalently, maximize $\sigma_{\min}(S)$. This is achieved when the light directions $\{\mathbf{L}_i\}$ are uniformly distributed over the unit sphere, ensuring that the columns of $S$ span $\mathbb{R}^3$ evenly. In practice, lights are often arranged in a hemispherical configuration with uniform azimuthal and elevation spacing. Using $m > 3$ images provides two additional benefits: the least-squares solution averages out random noise, and the system becomes more robust to individual measurements corrupted by saturation or outliers.
 
-This shows that the condition number $\kappa(S)$ controls the worst-case amplification of measurement noise. A large condition number indicates that small errors in $\mathbf{I}$ can lead to large errors in $\mathbf{g}$.
 
-\textbf{Optimal Light Placement:} To minimize noise sensitivity, we seek to minimize $\kappa(S)$, or equivalently, maximize $\sigma_{\min}(S)$. This is achieved when the light directions $\{\mathbf{L}_i\}$ are as uniformly distributed as possible over the unit sphere, ensuring that the columns of $S$ span $\mathbb{R}^3$ evenly. In practice, lights are often arranged in a hemispherical configuration with uniform azimuthal and elevation spacing.
-
-\textbf{Overdetermined Systems:} Using $m > 3$ images provides two benefits: (1) the least-squares solution averages out random noise, and (2) the system becomes more robust to individual measurements corrupted by saturation or outliers.
-
-\paragraph{Shadow Handling and Robust Estimation.}
+\subsubsection{Shadow Handling and Robust Estimation}
 
 The linear system~\eqref{eq:pslinear} assumes that all lights illuminate the surface from the front ($\mathbf{n} \cdot \mathbf{L}_i > 0$). When a light source illuminates from behind, \textit{self-shadowing} occurs, and the image formation equation becomes:
 \begin{equation}
 I_i(x,y) = 0 \quad \text{if } \mathbf{n}(x,y) \cdot \mathbf{L}_i < 0
 \end{equation}
+These shadowed measurements violate the linear model and must be excluded. The standard approach is to first identify light sources $i$ for which $I_i(x,y) \approx 0$ (or below a threshold), then remove the corresponding rows from $S$ and entries from $\mathbf{I}(x,y)$, and finally solve the reduced least-squares problem on the remaining valid measurements. This row deletion strategy preserves the least-squares structure and ensures that only valid measurements contribute to the normal estimate. However, it requires at least three non-shadowed lights at every pixel to maintain $\text{rank}(S) = 3$.
 
-These shadowed measurements violate the linear model and must be excluded. The standard approach is:
-\begin{enumerate}
-\item For each pixel, identify light sources $i$ for which $I_i(x,y) \approx 0$ (or below a threshold).
-\item Remove the corresponding rows from $S$ and entries from $\mathbf{I}(x,y)$.
-\item Solve the reduced least-squares problem on the remaining (valid) measurements.
-\end{enumerate}
-
-This row deletion strategy preserves the least-squares structure and ensures that only valid measurements contribute to the normal estimate. However, it requires at least three non-shadowed lights at every pixel to maintain $\text{rank}(S) = 3$.
-
-\textbf{Alternative: Weighted Least Squares.} For pixels near shadow boundaries where intensities are low but non-zero, a weighted least-squares approach can be used:
+For pixels near shadow boundaries where intensities are low but non-zero, a weighted least-squares approach provides a smoother alternative:
 \begin{equation}
 \hat{\mathbf{g}} = \argmin_{\mathbf{g}} \sum_{i=1}^m w_i (I_i - \kappa_i \mathbf{L}_i^T \mathbf{g})^2
 \end{equation}
 where weights $w_i$ are set based on confidence (e.g., $w_i = \max(0, \mathbf{n} \cdot \mathbf{L}_i)$ or based on intensity magnitude). This provides a smooth transition between fully illuminated and shadowed regions.
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Gradient Integration via Poisson Equation}
+
+Photometric stereo recovers surface normals, but our ultimate goal is a height map $z(x,y)$. The normals induce gradient estimates $(p,q) = (\partial z/\partial x, \partial z/\partial y)$, but real measurements are noisy and generally not integrable---the curl $\partial_y p - \partial_x q \neq 0$. This section develops the variational framework that projects noisy gradients onto the closest integrable field.
+
+\subsubsection{Variational Formulation}
+
+Given noisy gradient estimates $(\hat{p}, \hat{q})$ from photometric stereo, we seek a height field $z(x,y)$ whose gradients best match the measurements in a least-squares sense. This leads to the variational problem:
+\begin{equation}
+\min_{z} \; \mathcal{E}[z] = \iint_\Omega \left[(\partial_x z - \hat{p})^2 + (\partial_y z - \hat{q})^2\right] dx \, dy
+\label{eq:poisson_variational}
+\end{equation}
+The functional $\mathcal{E}[z]$ measures the total squared error between the true gradients $(\partial_x z, \partial_y z)$ of the unknown surface and the measured estimates $(\hat{p}, \hat{q})$. By minimizing over all possible height functions $z$, we find the surface whose gradients are closest to the measurements in the $L^2$ norm.
+
+The integrand $\mathcal{L} = (\partial_x z - \hat{p})^2 + (\partial_y z - \hat{q})^2$ depends on $z$ only through its first derivatives $z_x = \partial_x z$ and $z_y = \partial_y z$. This structure is characteristic of problems in the calculus of variations, and the minimizer satisfies the Euler--Lagrange equation.
+
+\subsubsection{Euler--Lagrange Derivation}
+
+For a functional of the form $\mathcal{E}[z] = \iint \mathcal{L}(z, z_x, z_y) \, dx\,dy$, the necessary condition for a minimum is the Euler--Lagrange equation:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial z} - \frac{\partial}{\partial x}\left(\frac{\partial \mathcal{L}}{\partial z_x}\right) - \frac{\partial}{\partial y}\left(\frac{\partial \mathcal{L}}{\partial z_y}\right) = 0
+\end{equation}
+Since our Lagrangian $\mathcal{L} = (z_x - \hat{p})^2 + (z_y - \hat{q})^2$ does not depend on $z$ directly, we have $\partial \mathcal{L}/\partial z = 0$. Computing the remaining partial derivatives:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial z_x} = 2(z_x - \hat{p}), \qquad \frac{\partial \mathcal{L}}{\partial z_y} = 2(z_y - \hat{q})
+\end{equation}
+Substituting into the Euler--Lagrange equation:
+\begin{equation}
+\frac{\partial}{\partial x}\bigl[2(z_x - \hat{p})\bigr] + \frac{\partial}{\partial y}\bigl[2(z_y - \hat{q})\bigr] = 0
+\end{equation}
+Expanding and rearranging:
+\begin{equation}
+\partial_x^2 z + \partial_y^2 z = \partial_x \hat{p} + \partial_y \hat{q}
+\end{equation}
+This is the Poisson equation:
+\begin{equation}
+\nabla^2 z = f(x,y), \qquad \text{where } f = \nabla \cdot (\hat{p}, \hat{q}) = \frac{\partial \hat{p}}{\partial x} + \frac{\partial \hat{q}}{\partial y}
+\label{eq:poisson}
+\end{equation}
+Here $\nabla^2 = \partial_x^2 + \partial_y^2$ is the Laplacian operator and $f(x,y)$ is the divergence of the measured gradient field. The Poisson equation~\eqref{eq:poisson} arises because an integrable vector field must be curl-free ($\partial_y \hat{p} - \partial_x \hat{q} = 0$). When the measured gradients violate this condition due to noise, solving the Poisson problem projects $(\hat{p}, \hat{q})$ onto the closest integrable field in the $L^2$ sense.
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PLACEHOLDER: Section 2.2 - Gradient Integration via Poisson Equation
+% PLACEHOLDER: Section 2.3 - Boundary Condition Theory
 
 \end{document}
 

@@ -83,9 +83,26 @@ PROPOSED DOCUMENT STRUCTURE
        5.7.1 Light Count Sweep (m = 3 to 20)
        5.7.2 Noise Robustness (σ = 0 to 0.08)
        5.7.3 Resolution Convergence Study
-   5.8 Solver Comparison Experiment
-       5.8.1 FFT vs Finite Difference vs Tikhonov
-       5.8.2 Boundary Condition Effects
+    5.8 Solver Comparison Experiments
+        5.8.1 Protocol: Same Divergence Field, Different Solvers
+            (All solvers receive identical input from photometric stereo)
+        
+        5.8.2 FFT Solver (Periodic BC)
+            - Baseline performance
+            - Edge-wrap artifacts
+        
+        5.8.3 Finite Difference Solver (Dirichlet BC)
+            - Pinned boundaries: z=0 at edges
+            - Comparison to FFT on same surface
+        
+        5.8.4 Finite Difference Solver (Neumann BC)
+            - Zero-flux boundaries: ∂z/∂n = 0
+            - What happens when compatibility condition is violated
+        
+        5.8.5 Tikhonov Regularization Sweep
+            - λ sweep from 10⁻⁵ to 1
+            - L-curve / optimal λ selection
+            - Trade-off: smoothing vs. detail loss
 
 6. Results & Discussion
    6.1 Quantitative Results Summary

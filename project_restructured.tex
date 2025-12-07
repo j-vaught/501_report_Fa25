@@ -742,9 +742,110 @@ The complete FFT solver procedure is shown in Algorithm~\ref{alg:fft_solver}. Th
 \end{algorithmic}
 \end{algorithm}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Solver 2: Finite Difference (Dirichlet Boundaries)}
+
+The finite difference solver with Dirichlet boundary conditions constructs and solves the sparse linear system $A\mathbf{z} = \mathbf{f}$ derived in Section 3.1. Unlike the FFT approach, this method uses iterative linear algebra solvers that exploit the matrix sparsity, making it less efficient but more flexible in handling boundary conditions.
+
+\subsubsection{Mathematical Approach}
+
+We solve the discrete Poisson equation using the 5-point stencil developed in Section 3.1. For interior grid points, the stencil equation is:
+\begin{equation}
+\frac{z_{i+1,j} + z_{i-1,j} + z_{i,j+1} + z_{i,j-1} - 4z_{i,j}}{h^2} = f_{i,j}
+\end{equation}
+This produces a sparse $N \times N$ linear system where $N = H \cdot W$ is the total number of grid points. The matrix $A$ is symmetric negative definite, guaranteeing convergence of iterative methods.
+
+We solve this system using the Conjugate Gradient (CG) method, an iterative algorithm that finds the solution by successively minimizing the quadratic form $\frac{1}{2}\mathbf{z}^T A \mathbf{z} - \mathbf{f}^T \mathbf{z}$. CG generates a sequence of search directions that are mutually conjugate (orthogonal with respect to $A$), ensuring that each iteration makes progress in a new direction. For symmetric positive definite systems, CG converges in at most $N$ iterations, though in practice far fewer iterations are needed when the matrix is well-conditioned.
+
+Rather than explicitly forming the matrix $A$ (which would require storing $5N$ entries), we define a matrix-free linear operator that applies the 5-point stencil to any input vector. This reduces memory usage from $\mathcal{O}(N)$ to $\mathcal{O}(1)$ for the operator itself and enables efficient matrix-vector products.
+
+
+\subsubsection{Boundary Condition: Fixed Values}
+
+Dirichlet conditions prescribe the solution value on the boundary:
+\begin{equation}
+z(x,y) = g(x,y), \quad (x,y) \in \partial\Omega
+\end{equation}
+In the homogeneous case ($g \equiv 0$), the surface is pinned to zero height along the entire boundary. For photometric stereo, this is appropriate when the reconstructed object sits on a flat background or when the region of interest is masked to exclude edge artifacts.
+
+Implementation is straightforward: boundary points are held fixed at the prescribed value $g$, and only interior points are solved. The stencil at interior points adjacent to boundaries incorporates the known boundary values into the right-hand side. Figure~\ref{fig:dirichlet_stencil} illustrates this for a point near the boundary.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=0.9]
+% Grid
+\draw[step=1.2cm,gray,very thin] (0,0) grid (6,4.8);
+
+% Boundary (left edge)
+\draw[line width=2pt,red!70!black] (0,0) -- (0,4.8);
+\node[red!70!black] at (-0.5,2.4) {\rotatebox{90}{\small Boundary $z=g$}};
+
+% Boundary points
+\foreach \j in {0,1,2,3,4} {
+  \fill[red!30] (0,\j*1.2) circle (0.25);
+  \node[scale=0.7] at (0,\j*1.2) {$g$};
+}
+
+
+% Neighbors
+\fill[green!40] (2.4,2.4) circle (0.25);
+\node[scale=0.7] at (2.4,2.4) {$+1$};
+\fill[green!40] (1.2,3.6) circle (0.25);
+\node[scale=0.7] at (1.2,3.6) {$+1$};
+\fill[green!40] (1.2,1.2) circle (0.25);
+\node[scale=0.7] at (1.2,1.2) {$+1$};
+
+% Boundary neighbor (known)
+\fill[red!50] (0,2.4) circle (0.25);
+\node[scale=0.7] at (0,2.4) {$g$};
+
+% Arrows
+\draw[->,thick] (1.2,2.4) -- (0.35,2.4);
+\draw[->,thick] (1.2,2.4) -- (2.05,2.4);
+\draw[->,thick] (1.2,2.4) -- (1.2,3.25);
+\draw[->,thick] (1.2,2.4) -- (1.2,1.55);
+
+% Interior point being solved
+\fill[blue!40] (1.2,2.4) circle (0.35);
+\node[scale=0.8] at (1.2,2.4) {$-4$};
+
+% Labels
+\node at (3,0.4) {\small Interior points (unknowns)};
+\node[red!70!black] at (3,-0.3) {\small $g$ moves to RHS $\rightarrow f' = f - g/h^2$};
+\end{tikzpicture}
+\caption{Dirichlet boundary conditions: The known boundary value $g$ (red) is incorporated into the right-hand side, and only interior points (blue) are solved as unknowns.}
+\label{fig:dirichlet_stencil}
+\end{figure}
+
+For a point next to the left boundary ($i=1$), the stencil becomes:
+\begin{equation}
+\frac{z_{2,j} + g_{0,j} + z_{1,j+1} + z_{1,j-1} - 4z_{1,j}}{h^2} = f_{1,j}
+\end{equation}
+The known boundary value $g_{0,j}$ moves to the right-hand side: $f'_{1,j} = f_{1,j} - g_{0,j}/h^2$. This effectively reduces the system size to interior points only.
+
+\subsubsection{Algorithm Steps}
+
+The complete finite difference Dirichlet solver is shown in Algorithm~\ref{alg:fd_dirichlet}. The solver uses Conjugate Gradient (CG) for symmetric positive definite systems or GMRES for general sparse systems. The computational cost is $\mathcal{O}(N \cdot k)$ where $k$ is the number of CG iterations needed for convergence. Typically $k \ll N$, but the method is slower than FFT for large grids. The advantage is the ability to enforce exact boundary values.
+
+\begin{algorithm}[H]
+\caption{Finite Difference Poisson Solver (Dirichlet BC)}
+\label{alg:fd_dirichlet}
+\begin{algorithmic}[1]
+\Require Gradient estimates $(p, q)$, boundary values $g$
+\Ensure Height field $z$ with $z|_{\partial\Omega} = g$
+\State Compute divergence: $f \gets \partial_x p + \partial_y q$
+\State Define matrix-free operator $A: z \mapsto \nabla^2_h z$ (5-point stencil)
+\State Modify RHS for boundary: $\mathbf{f}' \gets \mathbf{f} - A_{\text{boundary}} \mathbf{g}$
+\State Initialize: $z_0 \gets 0$ for interior points
+\State Solve: $\mathbf{z}_{\text{int}} \gets \text{CG}(A_{\text{int}}, \mathbf{f}', z_0, \text{tol})$
+\State Combine: $z \gets z_{\text{int}} \cup g$
+\State \Return $z$
+\end{algorithmic}
+\end{algorithm}
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PLACEHOLDER: Section 3.3 - Finite Difference Dirichlet Solver
+% PLACEHOLDER: Section 3.4 - Finite Difference Neumann Solver
 
 \end{document}

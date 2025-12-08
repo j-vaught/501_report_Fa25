@@ -1481,6 +1481,216 @@ Oscillating surfaces test the pipeline's ability to handle sign-changing curvatu
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Ablation Studies}
+
+Ablation studies isolate individual pipeline parameters to quantify their effect on reconstruction accuracy. All studies use the same Gaussian test surface from Section~5.3 so that only the swept variable changes between runs.
+
+\subsubsection{Light Count Sweep ($m = 3$ to $20$)}
+
+This study measures how reconstruction quality improves as additional light sources are added. We sweep $m \in \{3, 4, \ldots, 20\}$ with lights evenly distributed on the canonical ring at $45^\circ$ elevation. For each $m$, we render noiseless Lambertian images, run photometric stereo, and integrate via FFT Poisson.
+
+\begin{center}
+\resizebox{0.9\linewidth}{!}{%
+\begin{tikzpicture}[>=latex,
+                    every node/.style={draw=USCGarnet, rounded corners, align=center,
+                                       text width=3.2cm, fill=USCGarnet!30},
+                    every path/.style={draw=USCGarnet, thick}]
+\node (init) {Fix Gaussian\\$Z_{\text{true}}$};
+\node[right=3.2cm of init] (lights) {Select $m$ lights\\($m \in \{3,\ldots,20\}$)};
+\node[right=3.2cm of lights] (render) {Render noiseless\\Lambertian stack};
+\node[below=1.8cm of init] (ps) {Run PS\\estimate normals};
+\node[right=3.2cm of ps] (poisson) {Integrate via\\FFT Poisson};
+\node[right=3.2cm of poisson] (metrics) {Record RMSE\\+ angular error};
+\draw[->] (init) -- (lights);
+\draw[->] (lights) -- (render);
+\draw[->] (render) |- ++(-0.8,-1.4) -| (ps);
+\draw[->] (ps) -- (poisson);
+\draw[->] (poisson) -- (metrics);
+\end{tikzpicture}%
+}
+\end{center}
+
+\noindent\textbf{Purpose:} Identify where the system transitions from underdetermined ($m < 3$) to overdetermined, how rapidly error drops with the first few lights, and when additional views stop providing meaningful gains. This informs the minimum light count needed for practical deployments.
+
+
+\subsubsection{Noise Robustness ($\sigma = 0$ to $0.08$)}
+
+This study quantifies pipeline sensitivity to sensor noise. Using a fixed eight-light configuration, we inject additive Gaussian noise $\mathcal{N}(0, \sigma^2)$ into the rendered images before photometric stereo. We sweep $\sigma \in \{0, 0.01, 0.02, 0.05, 0.08\}$.
+
+\begin{center}
+\resizebox{0.9\linewidth}{!}{%
+\begin{tikzpicture}[>=latex,
+                    every node/.style={draw=USCGarnet, rounded corners, align=center,
+                                       text width=3.2cm, fill=USCGarnet!30},
+                    every path/.style={draw=USCGarnet, thick}]
+\node (base) {Fix Gaussian\\+ 8 lights};
+\node[right=3.2cm of base] (sigma) {Select noise level\\$\sigma \in [0, 0.08]$};
+\node[right=3.2cm of sigma] (inject) {Inject $\mathcal{N}(0,\sigma^2)$\\into images};
+\node[below=1.8cm of base] (ps) {Run PS\\estimate normals};
+\node[right=3.2cm of ps] (poisson) {Integrate via\\FFT Poisson};
+\node[right=3.2cm of poisson] (metrics) {Record RMSE\\+ angular error};
+\draw[->] (base) -- (sigma);
+\draw[->] (sigma) -- (inject);
+\draw[->] (inject) |- ++(-0.8,-1.4) -| (ps);
+\draw[->] (ps) -- (poisson);
+\draw[->] (poisson) -- (metrics);
+\end{tikzpicture}%
+}
+\end{center}
+
+\noindent\textbf{Purpose:} Test whether degradation is linear or superlinear with noise, identify the noise threshold where regularization becomes necessary, and validate that the least-squares photometric fit remains stable under realistic sensor conditions.
+
+
+\subsubsection{Resolution Convergence Study}
+
+This study verifies the expected $\mathcal{O}(\Delta x^2)$ convergence rate of the finite-difference gradients and FFT Poisson solver. We resample the analytic Gaussian surface to ten grid resolutions spanning $16^2$ through $384^2$, recomputing $\Delta x, \Delta y$ and the divergence field at each scale.
+
+\begin{center}
+\resizebox{0.9\linewidth}{!}{%
+\begin{tikzpicture}[>=latex,
+                    every node/.style={draw=USCGarnet, rounded corners, align=center,
+                                       text width=3.2cm, fill=USCGarnet!30},
+                    every path/.style={draw=USCGarnet, thick}]
+\node (gt) {Gaussian\\$Z_{\text{true}}$};
+\node[right=3.2cm of gt] (scale) {Select grid size\\$N \in [16^2, 384^2]$};
+\node[right=3.2cm of scale] (resample) {Resample to\\chosen $N$};
+\node[below=1.8cm of gt] (grads) {Recompute\\$(p, q)$ with new $\Delta x$};
+\node[right=3.2cm of grads] (solve) {Integrate via\\FFT Poisson};
+\node[right=3.2cm of solve] (rmse) {Compare to GT\\RMSE vs.\ grid};
+\draw[->] (gt) -- (scale);
+\draw[->] (scale) -- (resample);
+\draw[->] (resample) |- ++(-0.8,-1.4) -| (grads);
+\draw[->] (grads) -- (solve);
+\draw[->] (solve) -- (rmse);
+\end{tikzpicture}%
+}
+\end{center}
+
+\noindent\textbf{Purpose:} Confirm second-order accuracy by plotting RMSE vs.\ grid spacing on log-log axes. A slope near $2$ validates the discretization; any deviation flags implementation bugs or numerical issues.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Solver Comparison Experiments}
+
+This section compares the four Poisson solvers developed in Chapter~3. All solvers receive identical input---the same divergence field from photometric stereo---ensuring that performance differences are attributable to the solver, not the input data.
+
+\subsubsection{Protocol: Same Divergence Field, Different Solvers}
+
+To isolate solver behavior, we use a single photometric stereo run on the Gaussian test surface with eight lights. This produces a fixed gradient field $(p, q)$ and corresponding divergence $f = \partial_x p + \partial_y q$. Each solver integrates this same $f$ under its respective boundary conditions.
+
+\begin{center}
+\resizebox{0.95\linewidth}{!}{%
+\begin{tikzpicture}[>=latex,
+                    every node/.style={draw=USCGarnet, rounded corners, align=center,
+                                       text width=3cm, fill=USCGarnet!30},
+                    every path/.style={draw=USCGarnet, thick}]
+\node (ps) {Gaussian + 8 lights\\$\to$ PS $\to (p,q)$};
+\node[right=2.5cm of ps] (div) {Divergence\\$f = \partial_x p + \partial_y q$};
+\node[below left=1.5cm and -0.5cm of div] (fft) {FFT Solver\\(Periodic BC)};
+\node[below=1.5cm of div] (dir) {FD Solver\\(Dirichlet BC)};
+\node[below right=1.5cm and -0.5cm of div] (neu) {FD Solver\\(Neumann BC)};
+\node[right=2.5cm of div] (tik) {Tikhonov FFT\\($\lambda$ sweep)};
+\node[below=3.5cm of div] (compare) {Mean-center all\\$\to$ compare RMSE};
+\draw[->] (ps) -- (div);
+\draw[->] (div) -- (fft);
+\draw[->] (div) -- (dir);
+\draw[->] (div) -- (neu);
+\draw[->] (div) -- (tik);
+\draw[->] (fft) -- (compare);
+\draw[->] (dir) -- (compare);
+\draw[->] (neu) -- (compare);
+\draw[->] (tik) |- (compare);
+\end{tikzpicture}%
+}
+\end{center}
+
+\noindent All reconstructions are mean-centered before computing RMSE against ground truth, removing the null-space constant inherent to Neumann and periodic problems.
+
+
+\subsubsection{FFT Solver (Periodic BC)}
+
+The FFT solver serves as our baseline due to its $\mathcal{O}(N \log N)$ speed. It implicitly enforces periodic boundary conditions---the domain wraps horizontally and vertically.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{lX}
+\hline\hline
+\textbf{Aspect} & \textbf{FFT Solver Characteristics} \\
+\hline
+\textbf{Boundary Condition} & Periodic: $z(0,y) = z(L_x,y)$, $z(x,0) = z(x,L_y)$ \\
+\textbf{Advantages} & Fastest solver; exact spectral inversion; no matrix assembly \\
+\textbf{Artifacts} & Edge-wrap ringing when surface doesn't decay to zero at boundaries \\
+\textbf{Best For} & Centered objects with gradients that vanish near domain edges \\
+\hline\hline
+\end{tabularx}
+\end{table}
+
+
+\subsubsection{Finite Difference Solver (Dirichlet BC)}
+
+The Dirichlet solver pins boundary heights to zero (or a known value), eliminating wrap-around artifacts at the cost of increased computation.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{lX}
+\hline\hline
+\textbf{Aspect} & \textbf{FD-Dirichlet Solver Characteristics} \\
+\hline
+\textbf{Boundary Condition} & Fixed value: $z|_{\partial\Omega} = 0$ \\
+\textbf{Advantages} & No edge artifacts; physically meaningful for objects on flat planes \\
+\textbf{Disadvantages} & Slower than FFT ($\mathcal{O}(Nk)$ with CG iterations); may distort surfaces that don't naturally vanish at edges \\
+\textbf{Best For} & Surfaces known to sit on a zero-height background \\
+\hline\hline
+\end{tabularx}
+\end{table}
+
+
+\subsubsection{Finite Difference Solver (Neumann BC)}
+
+The Neumann solver enforces zero normal derivative at boundaries---the surface approaches edges with zero slope perpendicular to the boundary.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{lX}
+\hline\hline
+\textbf{Aspect} & \textbf{FD-Neumann Solver Characteristics} \\
+\hline
+\textbf{Boundary Condition} & Zero flux: $\partial z/\partial n|_{\partial\Omega} = 0$ \\
+\textbf{Advantages} & Natural for unknown boundary heights; no artificial pinning \\
+\textbf{Compatibility} & Requires $\iint f \, dA = 0$; mean is subtracted before solving \\
+\textbf{Disadvantages} & Solution determined only up to additive constant; must mean-center \\
+\textbf{Best For} & Surfaces extending beyond image frame with unknown edge heights \\
+\hline\hline
+\end{tabularx}
+\end{table}
+
+
+\subsubsection{Tikhonov Regularization Sweep}
+
+Tikhonov regularization adds a smoothness penalty to suppress noise-induced artifacts at the cost of losing fine detail. We sweep the regularization parameter $\lambda \in [10^{-5}, 1]$ logarithmically.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{lX}
+\hline\hline
+\textbf{Aspect} & \textbf{Tikhonov Regularization Characteristics} \\
+\hline
+\textbf{Formulation} & Modified eigenvalues: $\hat{Z} = \hat{F} / (-k^2 - \lambda k^4)$ \\
+\textbf{$\lambda$ Range} & $10^{-5}$ (minimal smoothing) to $1$ (heavy smoothing) \\
+\textbf{Selection Method} & L-curve: plot $\|\nabla^2 z - f\|$ vs.\ $\|z\|$; choose corner \\
+\textbf{Trade-off} & Small $\lambda$: preserves detail but amplifies noise; large $\lambda$: smooth but loses features \\
+\hline\hline
+\end{tabularx}
+\end{table}
+
+\noindent\textbf{Purpose:} The $\lambda$ sweep traces a U-curve where RMSE initially decreases (noise suppression) then increases (over-smoothing). The optimal $\lambda$ sits at the elbow, balancing fidelity and stability.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % End of Section 5: Experimental Validation
 % Results will be presented in Section 6
 

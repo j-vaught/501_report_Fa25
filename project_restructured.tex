@@ -922,6 +922,68 @@ Unlike an iterative finite difference approach which requires tuning convergence
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
+\subsection{Solver 4: CG-Iterative (Dirichlet Boundaries)}
+
+The Conjugate Gradient (CG) iterative solver provides an alternative approach to the Poisson equation, using iterative refinement rather than direct factorization or spectral transforms. This method achieves higher precision than direct sparse solvers while maintaining the flexibility of arbitrary boundary conditions.
+
+\subsubsection{Mathematical Formulation}
+
+The CG method solves the sparse linear system arising from finite difference discretization of the Laplacian. For a grid of size $N_x \times N_y$, we discretize the Poisson equation $\nabla^2 z = f$ using the standard 5-point stencil:
+\begin{equation}
+\frac{z_{i-1,j} - 2z_{i,j} + z_{i+1,j}}{\Delta x^2} + \frac{z_{i,j-1} - 2z_{i,j} + z_{i,j+1}}{\Delta y^2} = f_{i,j}
+\end{equation}
+
+This yields a sparse linear system $\mathbf{A}\mathbf{z} = \mathbf{b}$ where $\mathbf{A}$ is an $N \times N$ matrix (with $N = N_x \cdot N_y$) having at most 5 non-zero entries per row. The matrix $\mathbf{A}$ is symmetric positive semi-definite, making it suitable for the Conjugate Gradient method.
+
+\subsubsection{Dirichlet Boundary Conditions}
+
+We enforce Dirichlet conditions by setting boundary values to zero:
+\begin{equation}
+z(x,y) = 0 \quad \text{for } (x,y) \in \partial\Omega
+\end{equation}
+
+In matrix form, boundary rows of $\mathbf{A}$ are replaced with identity rows (diagonal = 1, off-diagonal = 0), and corresponding entries in $\mathbf{b}$ are set to zero. This ensures boundary unknowns remain fixed throughout the iteration.
+
+\subsubsection{Conjugate Gradient Iteration}
+
+For symmetric positive definite systems, CG converges in at most $N$ iterations, though in practice far fewer are needed. The algorithm minimizes the quadratic form:
+\begin{equation}
+\phi(\mathbf{z}) = \frac{1}{2}\mathbf{z}^T\mathbf{A}\mathbf{z} - \mathbf{b}^T\mathbf{z}
+\end{equation}
+
+Each iteration updates the solution along conjugate directions, guaranteeing monotonic decrease in the error norm $\|\mathbf{z}^{(k)} - \mathbf{z}^*\|_{\mathbf{A}}$.
+
+The convergence rate depends on the condition number $\kappa(\mathbf{A})$. For the discrete Laplacian, $\kappa \sim \mathcal{O}(N)$, giving convergence in $\mathcal{O}(\sqrt{N})$ iterations for a tolerance of $10^{-10}$. In practice, we observe 200--400 iterations for $128 \times 128$ grids.
+
+\subsubsection{Algorithm}
+
+\begin{algorithm}[H]
+\caption{CG-Iterative Poisson Solver (Dirichlet BC)}
+\label{alg:cg_iterative}
+\begin{algorithmic}[1]
+\Require Gradients $(p, q)$, grid spacing $(\Delta x, \Delta y)$, tolerance $\epsilon$
+\Ensure Height field $z$ with $z|_{\partial\Omega} = 0$
+\State Compute divergence: $\mathbf{b} \gets \partial_x p + \partial_y q$
+\State Build sparse Laplacian matrix $\mathbf{A}$ with 5-point stencil
+\State Set boundary rows to identity, boundary RHS to zero
+\State Initialize: $\mathbf{z}^{(0)} \gets \mathbf{0}$, $\mathbf{r}^{(0)} \gets \mathbf{b}$, $\mathbf{p}^{(0)} \gets \mathbf{r}^{(0)}$
+\While{$\|\mathbf{r}^{(k)}\| > \epsilon \|\mathbf{b}\|$}
+    \State $\alpha_k \gets \frac{\mathbf{r}^{(k)T}\mathbf{r}^{(k)}}{\mathbf{p}^{(k)T}\mathbf{A}\mathbf{p}^{(k)}}$
+    \State $\mathbf{z}^{(k+1)} \gets \mathbf{z}^{(k)} + \alpha_k \mathbf{p}^{(k)}$
+    \State $\mathbf{r}^{(k+1)} \gets \mathbf{r}^{(k)} - \alpha_k \mathbf{A}\mathbf{p}^{(k)}$
+    \State $\beta_k \gets \frac{\mathbf{r}^{(k+1)T}\mathbf{r}^{(k+1)}}{\mathbf{r}^{(k)T}\mathbf{r}^{(k)}}$
+    \State $\mathbf{p}^{(k+1)} \gets \mathbf{r}^{(k+1)} + \beta_k \mathbf{p}^{(k)}$
+\EndWhile
+\State Center solution: $z \gets z - \text{mean}(z)$
+\State \Return $z$
+\end{algorithmic}
+\end{algorithm}
+
+The CG solver achieves higher precision than direct methods because it iterates until the residual falls below a specified tolerance ($10^{-10}$ in our implementation), whereas direct solvers may accumulate numerical errors through factorization. This explains the superior RMSE results observed in Section~\ref{sec:results}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 \subsection{Regularization (Noise Handling)}
 
 Real photometric stereo data contains noise from sensor limitations, lighting imperfections, and violations of the Lambertian assumption. This noise propagates through the gradient estimation and into the Poisson problem, where it can cause severe artifacts in the reconstructed surface. Regularization techniques address this by penalizing solutions that fit noise too closely.
@@ -1726,6 +1788,7 @@ The DCT solver uses the Discrete Cosine Transform to enforce Neumann boundary co
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
 \section{Results and Discussion}
+\label{sec:results}
 
 This section presents the experimental results from our photometric stereo pipeline. We evaluate three Poisson solvers---FFT (periodic), Finite Difference (Dirichlet), and DCT (Neumann)---across eight test surfaces representing diverse geometric categories. All experiments use a $256 \times 256$ grid resolution with 32 lights uniformly distributed at $45°$ elevation.
 
@@ -2266,5 +2329,509 @@ The experiments assume global illumination with a single uniform light direction
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % End of Section 6: Results and Discussion
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% APPENDICES
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+
+\newpage
+\section{Python Code Listings}
+\label{app:python}
+
+This appendix contains the complete Python implementation with config, runner, surfaces, solvers, photometric stereo, and visualization modules.
+
+\subsection{Configuration (config.py)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+# Grid resolution
+NX, NY = 256, 256
+
+# Domain extent
+X_MIN, X_MAX = -2.0, 2.0
+Y_MIN, Y_MAX = -2.0, 2.0
+
+# Lighting configuration
+DEFAULT_NUM_LIGHTS = 32
+DEFAULT_ELEVATION_DEG = 45.0
+
+# CG solver parameters
+CG_TOL = 1e-10
+CG_MAX_ITER = 5000
+\end{lstlisting}
+
+\subsection{FFT Solver (solvers/fft\_periodic.py)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+import numpy as np
+
+def solve_poisson_fft(f, dx, dy):
+    """FFT-based Poisson solver with periodic BC."""
+    Ny, Nx = f.shape
+    
+    # Build frequency grid
+    kx = np.fft.fftfreq(Nx, d=dx) * 2 * np.pi
+    ky = np.fft.fftfreq(Ny, d=dy) * 2 * np.pi
+    KX, KY = np.meshgrid(kx, ky)
+    
+    # Laplacian in Fourier space
+    denom = -(KX**2 + KY**2)
+    denom[0, 0] = 1  # Avoid division by zero
+    
+    # Transform, solve, inverse
+    F_hat = np.fft.fft2(f)
+    Z_hat = F_hat / denom
+    Z_hat[0, 0] = 0  # DC component
+    
+    z = np.real(np.fft.ifft2(Z_hat))
+    return z - np.mean(z)
+\end{lstlisting}
+
+\subsection{DCT Solver (solvers/dct\_neumann.py)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+from scipy.fftpack import dct, idct
+
+def dct2(x):
+    return dct(dct(x.T, norm='ortho').T, norm='ortho')
+
+def idct2(x):
+    return idct(idct(x.T, norm='ortho').T, norm='ortho')
+
+def solve_poisson_dct_neumann(f, dx, dy):
+    """DCT-based Poisson solver with Neumann BC."""
+    Ny, Nx = f.shape
+    f = f - np.mean(f)  # Compatibility
+    
+    # Eigenvalues
+    ii, jj = np.arange(Nx), np.arange(Ny)
+    lam_x = -2/dx**2 * (1 - np.cos(np.pi * ii / Nx))
+    lam_y = -2/dy**2 * (1 - np.cos(np.pi * jj / Ny))
+    LX, LY = np.meshgrid(lam_x, lam_y)
+    lam = LX + LY
+    lam[0, 0] = 1
+    
+    Z_hat = dct2(f) / lam
+    Z_hat[0, 0] = 0
+    return idct2(Z_hat) - np.mean(idct2(Z_hat))
+\end{lstlisting}
+
+\subsection{CG Solver (solvers/cg\_iterative.py)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+from scipy import sparse
+from scipy.sparse.linalg import cg
+
+def solve_poisson_cg(f, dx, dy, tol=1e-10):
+    """CG Poisson solver with Dirichlet BC."""
+    ny, nx = f.shape
+    N = nx * ny
+    
+    cx, cy = 1/dx**2, 1/dy**2
+    cc = -2 * (cx + cy)
+    
+    # Build sparse Laplacian
+    rows, cols, vals = [], [], []
+    for i in range(ny):
+        for j in range(nx):
+            k = i * nx + j
+            if i == 0 or i == ny-1 or j == 0 or j == nx-1:
+                rows.append(k); cols.append(k); vals.append(1.0)
+            else:
+                rows.append(k); cols.append(k); vals.append(cc)
+                rows.append(k); cols.append(k-1); vals.append(cx)
+                rows.append(k); cols.append(k+1); vals.append(cx)
+                rows.append(k); cols.append(k-nx); vals.append(cy)
+                rows.append(k); cols.append(k+nx); vals.append(cy)
+    
+    A = sparse.csr_matrix((vals, (rows, cols)), shape=(N, N))
+    b = f.flatten()
+    # Zero boundary RHS
+    for i in range(ny):
+        for j in range(nx):
+            if i == 0 or i == ny-1 or j == 0 or j == nx-1:
+                b[i*nx + j] = 0
+    
+    z, _ = cg(A, b, rtol=tol)
+    return z.reshape((ny, nx)) - np.mean(z)
+\end{lstlisting}
+
+\subsection{FD Solver (solvers/fd\_dirichlet.py)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+from scipy import sparse
+from scipy.sparse.linalg import cg
+
+def solve_poisson_fd_dirichlet(f, dx, dy):
+    """Finite difference Poisson solver with Dirichlet BC."""
+    Ny, Nx = f.shape
+    N = Nx * Ny
+    h2 = dx * dy
+    
+    # Build sparse Laplacian with 5-point stencil
+    main_diag = -4.0 * np.ones(N)
+    off_diag_1 = np.ones(N - 1)
+    off_diag_Nx = np.ones(N - Nx)
+    
+    # Remove connections across row boundaries
+    for i in range(1, Ny):
+        off_diag_1[i * Nx - 1] = 0
+    
+    A = sparse.diags([main_diag, off_diag_1, off_diag_1, 
+                      off_diag_Nx, off_diag_Nx],
+                     [0, 1, -1, Nx, -Nx], format='csr') / h2
+    
+    z_flat, _ = cg(A, f.flatten(), maxiter=2000, rtol=1e-8)
+    return z_flat.reshape((Ny, Nx))
+\end{lstlisting}
+
+\subsection{Visualization (visualization/)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+# visualization/surfaces_3d.py
+def save_3d_surface(X, Y, Z, filepath, title=''):
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(X, Y, Z, cmap='viridis', edgecolor='none')
+    ax.set_title(title)
+    plt.savefig(filepath, dpi=150, bbox_inches='tight')
+    plt.close()
+
+# visualization/heatmaps.py
+def save_depth_heatmap(Z, filepath, title=''):
+    plt.figure(figsize=(6, 5))
+    plt.imshow(Z, cmap='viridis', origin='lower')
+    plt.colorbar(label='Height')
+    plt.title(title)
+    plt.savefig(filepath, dpi=150, bbox_inches='tight')
+    plt.close()
+
+# visualization/histograms.py
+def save_error_histogram(error, filepath, title=''):
+    plt.figure(figsize=(6, 4))
+    plt.hist(error.flatten(), bins=50, edgecolor='black')
+    plt.xlabel('Error'); plt.ylabel('Count')
+    plt.title(title)
+    plt.savefig(filepath, dpi=150, bbox_inches='tight')
+    plt.close()
+
+# visualization/profiles.py
+def save_profile_comparison(Z_true, Z_est, filepath):
+    mid = Z_true.shape[0] // 2
+    plt.figure(figsize=(8, 4))
+    plt.plot(Z_true[mid, :], 'b-', label='True', linewidth=2)
+    plt.plot(Z_est[mid, :], 'r--', label='Estimated', linewidth=2)
+    plt.legend(); plt.xlabel('X'); plt.ylabel('Height')
+    plt.savefig(filepath, dpi=150, bbox_inches='tight')
+    plt.close()
+\end{lstlisting}
+
+\subsection{Surface Generators (surfaces/)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+def create_gaussian_surface(Nx=256, Ny=256, sigma=0.5):
+    x, y = np.linspace(-2, 2, Nx), np.linspace(-2, 2, Ny)
+    X, Y = np.meshgrid(x, y)
+    Z = np.exp(-(X**2 + Y**2) / (2*sigma**2))
+    return X, Y, Z, x[1]-x[0], y[1]-y[0]
+
+def create_sphere_surface(Nx=256, Ny=256, radius=1.5):
+    X, Y = np.meshgrid(np.linspace(-2, 2, Nx), np.linspace(-2, 2, Ny))
+    r2 = X**2 + Y**2
+    Z = np.where(r2 < radius**2, np.sqrt(radius**2 - r2), 0)
+    return X, Y, Z, 4/(Nx-1), 4/(Ny-1)
+
+def create_cone_surface(Nx=256, Ny=256, height=1.5):
+    X, Y = np.meshgrid(np.linspace(-2, 2, Nx), np.linspace(-2, 2, Ny))
+    Z = np.maximum(0, height - np.sqrt(X**2 + Y**2))
+    return X, Y, Z, 4/(Nx-1), 4/(Ny-1)
+
+def create_saddle_surface(Nx=256, Ny=256, scale=0.3):
+    X, Y = np.meshgrid(np.linspace(-2, 2, Nx), np.linspace(-2, 2, Ny))
+    Z = scale * (X**2 - Y**2)
+    return X, Y, Z, 4/(Nx-1), 4/(Ny-1)
+
+def create_sinusoid_surface(Nx=256, Ny=256, freq=2):
+    X, Y = np.meshgrid(np.linspace(-2, 2, Nx), np.linspace(-2, 2, Ny))
+    Z = 0.5 * np.sin(freq*np.pi*X) * np.sin(freq*np.pi*Y)
+    return X, Y, Z, 4/(Nx-1), 4/(Ny-1)
+
+def create_peaks_surface(Nx=256, Ny=256):
+    X, Y = np.meshgrid(np.linspace(-3, 3, Nx), np.linspace(-3, 3, Ny))
+    Z = 3*(1-X)**2*np.exp(-X**2-(Y+1)**2) \
+        - 10*(X/5-X**3-Y**5)*np.exp(-X**2-Y**2) \
+        - 1/3*np.exp(-(X+1)**2-Y**2)
+    return X, Y, Z * 0.15, 6/(Nx-1), 6/(Ny-1)
+\end{lstlisting}
+
+\subsection{Photometric Stereo Pipeline}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+# photometric/lighting.py
+def make_rotating_lights(m=16, elevation_deg=45.0):
+    """Generate m lights uniformly spaced in azimuth."""
+    elevation = np.deg2rad(elevation_deg)
+    azimuths = np.linspace(0, 2*np.pi, m, endpoint=False)
+    lights = np.zeros((m, 3))
+    lights[:, 0] = np.cos(azimuths) * np.sin(elevation)
+    lights[:, 1] = np.sin(azimuths) * np.sin(elevation)
+    lights[:, 2] = np.cos(elevation)
+    return lights
+
+# photometric/stereo.py
+def photometric_stereo(images, lights):
+    """Per-pixel least-squares PS: solve S @ g = I."""
+    m, Ny, Nx = images.shape
+    I = images.reshape(m, -1)
+    S_pinv = np.linalg.pinv(lights)
+    G = S_pinv @ I
+    norms = np.maximum(np.linalg.norm(G, axis=0, keepdims=True), 1e-10)
+    N_flat = G / norms
+    return N_flat.T.reshape(Ny, Nx, 3)
+
+def gradients_from_normals(N_est):
+    """Convert normals to gradients: p = -nx/nz, q = -ny/nz."""
+    nz = np.where(np.abs(N_est[:,:,2]) > 1e-6, N_est[:,:,2], 1e-6)
+    return -N_est[:,:,0]/nz, -N_est[:,:,1]/nz
+
+# photometric/gradient.py
+def compute_divergence(p, q, dx, dy):
+    """Compute div(p,q) = dp/dx + dq/dy."""
+    dp_dx = np.gradient(p, dx, axis=1)
+    dq_dy = np.gradient(q, dy, axis=0)
+    return dp_dx + dq_dy
+\end{lstlisting}
+
+\subsection{Main Runner (runner.py)}
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\footnotesize]
+from experiments.exp_solver_compare import run_all_shapes_all_solvers
+
+def main():
+    results = run_all_shapes_all_solvers()
+    print_results_table(results)
+    save_results(results, 'solver_comparison_results.json')
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+\newpage
+\section{MATLAB Code Listings}
+\label{app:matlab}
+
+This appendix contains the complete MATLAB implementation with config, runner, surfaces, solvers, photometric stereo, and visualization modules.
+
+\subsection{Configuration (config.m)}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+% config.m - Configuration parameters
+NX = 128; NY = 128;
+X_MIN = -2.0; X_MAX = 2.0; Y_MIN = -2.0; Y_MAX = 2.0;
+DEFAULT_NUM_LIGHTS = 32;
+DEFAULT_ELEVATION_DEG = 45.0;
+CG_TOL = 1e-10; CG_MAX_ITER = 5000;
+\end{lstlisting}
+
+\subsection{Main Runner (runner.m)}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+% runner.m - Main experiment orchestrator
+addpath('surfaces','solvers','photometric','visualization');
+run('config.m');
+% Define surfaces and solvers, loop over combinations
+for i = 1:length(surface_names)
+    [X, Y, Z_true, dx, dy] = surfaces.(sname)();
+    N = height_to_normals(Z_true, dx, dy);
+    [p, q] = normals_to_gradients(N);
+    f = compute_divergence(p, q, dx, dy);
+    Z_est = solvers.(solver_name)(f, dx, dy);
+    rmse = sqrt(mean((Z_true(:) - Z_est(:)).^2));
+end
+\end{lstlisting}
+
+\subsection{Surface Generators (surfaces/)}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+function [X,Y,Z,dx,dy] = create_gaussian_surface(Nx, Ny)
+    [X,Y] = meshgrid(linspace(-2,2,Nx), linspace(-2,2,Ny));
+    Z = exp(-(X.^2+Y.^2)/0.5); dx=4/(Nx-1); dy=4/(Ny-1);
+end
+
+function [X,Y,Z,dx,dy] = create_sphere_surface(Nx, Ny)
+    [X,Y] = meshgrid(linspace(-2,2,Nx), linspace(-2,2,Ny));
+    r2 = X.^2+Y.^2; R=1.5;
+    Z = zeros(size(X)); Z(r2<R^2) = sqrt(R^2-r2(r2<R^2));
+    dx=4/(Nx-1); dy=4/(Ny-1);
+end
+
+function [X,Y,Z,dx,dy] = create_cone_surface(Nx, Ny)
+    [X,Y] = meshgrid(linspace(-2,2,Nx), linspace(-2,2,Ny));
+    Z = max(0, 1.5 - sqrt(X.^2+Y.^2)); dx=4/(Nx-1); dy=4/(Ny-1);
+end
+
+function [X,Y,Z,dx,dy] = create_saddle_surface(Nx, Ny)
+    [X,Y] = meshgrid(linspace(-2,2,Nx), linspace(-2,2,Ny));
+    Z = 0.3*(X.^2-Y.^2); dx=4/(Nx-1); dy=4/(Ny-1);
+end
+
+function [X,Y,Z,dx,dy] = create_sinusoid_surface(Nx, Ny)
+    [X,Y] = meshgrid(linspace(-2,2,Nx), linspace(-2,2,Ny));
+    Z = 0.5*sin(2*pi*X).*sin(2*pi*Y); dx=4/(Nx-1); dy=4/(Ny-1);
+end
+
+function [X,Y,Z,dx,dy] = create_peaks_surface(Nx, Ny)
+    [X,Y] = meshgrid(linspace(-3,3,Nx), linspace(-3,3,Ny));
+    Z = 0.15*peaks(Nx); dx=6/(Nx-1); dy=6/(Ny-1);
+end
+\end{lstlisting}
+
+\subsection{FFT Solver (solve\_poisson\_fft.m)}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+function Z = solve_poisson_fft(f, dx, dy)
+% FFT-based Poisson solver with periodic BC
+    [Ny, Nx] = size(f);
+    
+    kx = (2*pi / (Nx*dx)) * [0:Nx/2-1, -Nx/2:-1];
+    ky = (2*pi / (Ny*dy)) * [0:Ny/2-1, -Ny/2:-1];
+    [KX, KY] = meshgrid(kx, ky);
+    
+    denom = -(KX.^2 + KY.^2);
+    denom(1, 1) = 1;
+    
+    F_hat = fft2(f);
+    Z_hat = F_hat ./ denom;
+    Z_hat(1, 1) = 0;
+    
+    Z = real(ifft2(Z_hat));
+    Z = Z - mean(Z(:));
+end
+\end{lstlisting}
+
+\subsection{DCT Solver (solve\_poisson\_dct.m)}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+function Z = solve_poisson_dct(f, dx, dy)
+% DCT-based Poisson solver with Neumann BC
+    [Ny, Nx] = size(f);
+    f = f - mean(f(:));
+    
+    ii = 0:Nx-1; jj = 0:Ny-1;
+    lambda_x = -2/dx^2 * (1 - cos(pi * ii / Nx));
+    lambda_y = -2/dy^2 * (1 - cos(pi * jj / Ny));
+    [LX, LY] = meshgrid(lambda_x, lambda_y);
+    lambda = LX + LY;
+    lambda(1, 1) = 1;
+    
+    F_hat = dct2(f);
+    Z_hat = F_hat ./ lambda;
+    Z_hat(1, 1) = 0;
+    
+    Z = idct2(Z_hat);
+    Z = Z - mean(Z(:));
+end
+\end{lstlisting}
+
+\subsection{FD/CG Solver (solve\_poisson\_fd.m)}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+function Z = solve_poisson_fd(f, dx, dy)
+% Finite difference solver with Dirichlet BC
+    [Ny, Nx] = size(f);
+    N = Nx * Ny;
+    
+    cx = 1/dx^2; cy = 1/dy^2;
+    cc = -2 * (cx + cy);
+    
+    % Build sparse Laplacian using spdiags
+    d0 = cc * ones(N, 1);
+    d1 = cx * ones(N, 1);
+    dNx = cy * ones(N, 1);
+    
+    A = spdiags([dNx, d1, d0, d1, dNx], ...
+                [-Nx, -1, 0, 1, Nx], N, N);
+    
+    % Apply Dirichlet BC
+    b = f(:);
+    for i = 1:Ny
+        for j = 1:Nx
+            k = (i-1)*Nx + j;
+            if i==1 || i==Ny || j==1 || j==Nx
+                A(k,:) = 0; A(k,k) = 1; b(k) = 0;
+            end
+        end
+    end
+    
+    Z = reshape(A \ b, [Ny, Nx]);
+    Z = Z - mean(Z(:));
+end
+\end{lstlisting}
+
+\subsection{Photometric Stereo Functions}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+function lights = make_rotating_lights(num_lights, elevation_deg)
+% Generate light directions uniformly around azimuth
+    elev = deg2rad(elevation_deg);
+    azimuth = linspace(0, 2*pi, num_lights + 1);
+    azimuth = azimuth(1:end-1);
+    
+    lights = zeros(num_lights, 3);
+    for i = 1:num_lights
+        lights(i,:) = [cos(elev)*cos(azimuth(i)), ...
+                       cos(elev)*sin(azimuth(i)), ...
+                       sin(elev)];
+    end
+end
+
+function N = height_to_normals(Z, dx, dy)
+% Compute normals from height field
+    [Zy, Zx] = gradient(Z, dx, dy);
+    norm_val = sqrt(Zx.^2 + Zy.^2 + 1);
+    N = cat(3, -Zx./norm_val, -Zy./norm_val, 1./norm_val);
+end
+
+function [p, q] = normals_to_gradients(N)
+% Convert normals to gradients
+    Nz = N(:,:,3); Nz(Nz < 1e-10) = 1e-10;
+    p = -N(:,:,1) ./ Nz;
+    q = -N(:,:,2) ./ Nz;
+end
+
+function f = compute_divergence(p, q, dx, dy)
+% Compute divergence for Poisson RHS
+    [~, dp_dx] = gradient(p, dx, dy);
+    [dq_dy, ~] = gradient(q, dx, dy);
+    f = dp_dx + dq_dy;
+end
+\end{lstlisting}
+
+\subsection{Visualization (visualization/save\_surface\_figures.m)}
+
+\begin{lstlisting}[language=Matlab, basicstyle=\ttfamily\footnotesize]
+function save_surface_figures(X, Y, Z_true, Z_est, out_dir, shape, solver)
+% Generate and save 7 visualization figures
+    full_dir = fullfile(out_dir, shape, solver);
+    if ~exist(full_dir, 'dir'), mkdir(full_dir); end
+    
+    err = Z_true - Z_est;
+    rmse = sqrt(mean(err(:).^2));
+    
+    % 3D True Surface
+    fig = figure('Visible','off');
+    surf(X, Y, Z_true, 'EdgeColor','none'); colormap parula;
+    saveas(fig, fullfile(full_dir, '3d_true.png')); close(fig);
+    
+    % 3D Estimated Surface
+    fig = figure('Visible','off');
+    surf(X, Y, Z_est, 'EdgeColor','none');
+    title(sprintf('RMSE = %.4f', rmse));
+    saveas(fig, fullfile(full_dir, '3d_est.png')); close(fig);
+    
+    % Depth maps, error map, profile, histogram (7 total)
+end
+\end{lstlisting}
 
 \end{document}

@@ -1168,103 +1168,134 @@ where $N$ is the total number of valid pixels. This centers the surface around t
 Additional post-processing steps may include median filtering to remove isolated spike artifacts, clipping extreme values that arise from noisy gradient estimates, or applying a low-pass filter to smooth high-frequency reconstruction noise. For visualization, the height field is typically scaled to a convenient range and rendered as a 3D mesh or depth map.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of Section 4: Implementation Pipeline
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SECTION 5: SOFTWARE ARCHITECTURE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \newpage
-\subsection{Software Architecture Overview}
+\section{Software Architecture}
 
-\textbf{[STUB SECTION --- TO BE REWRITTEN]}
+This section describes the modular software architecture developed to validate the photometric stereo pipeline and Poisson solvers.
 
-This section provides an overview of the software architecture for both Python and MATLAB implementations. The modular design separates concerns into distinct components for image processing, normal estimation, and surface reconstruction.
+\subsection{Package Structure}
 
-\subsubsection{Python Implementation Structure}
+The implementation is organized as a Python package with the following directory structure. Each module is self-contained with a single responsibility.
 
-\textbf{[PLACEHOLDER --- CONTENT TO BE REPLACED]}
+\begin{lstlisting}[language=bash, basicstyle=\ttfamily\small]
+python_code/
+|
+|-- config.py                   # Shared constants and parameters
+|-- runner.py                   # Main experiment orchestrator
+|
+|-- surfaces/                   # Test surface generators (8 files)
+|   |-- __init__.py             # Exports all create_* functions
+|   |-- gaussian.py             # Gaussian bump surface
+|   |-- sphere.py               # Hemispherical surface
+|   |-- ellipsoid.py            # Ellipsoidal surface
+|   |-- cone.py                 # Conical surface with apex
+|   |-- cube.py                 # Flat-top cube surface
+|   |-- saddle.py               # Hyperbolic paraboloid
+|   |-- peaks.py                # MATLAB peaks function
+|   +-- sinusoid.py             # 2D sinusoidal surface
+|
+|-- photometric/                # Photometric stereo pipeline (4 files)
+|   |-- __init__.py             # Exports all PS functions
+|   |-- lighting.py             # make_rotating_lights()
+|   |-- rendering.py            # render_photometric_images()
+|   |-- stereo.py               # photometric_stereo()
+|   +-- gradient.py             # gradients_from_normals(), compute_divergence()
+|
+|-- solvers/                    # Poisson equation solvers (4 files)
+|   |-- __init__.py             # Exports all solve_* functions
+|   |-- fft_periodic.py         # FFT solver (periodic BC)
+|   |-- fd_dirichlet.py         # Finite difference (Dirichlet BC)
+|   |-- dct_neumann.py          # DCT solver (Neumann BC)
+|   +-- tikhonov.py             # Tikhonov regularization
+|
+|-- visualization/              # Plotting utilities (6 files)
+|   |-- __init__.py             # Exports all save_* functions
+|   |-- surfaces_3d.py          # 3D mesh plots
+|   |-- heatmaps.py             # 2D depth/error maps
+|   |-- profiles.py             # Cross-section line plots
+|   |-- histograms.py           # Error distribution histograms
+|   |-- normals.py              # RGB normal map visualization
+|   +-- composites.py           # Multi-panel figure generation
+|
+|-- experiments/                # Experiment definitions (2 files)
+|   |-- __init__.py
+|   |-- exp_solver_compare.py   # 8 shapes x 3 solvers comparison
+|   +-- exp_ablation.py         # Light sweep, noise, Tikhonov
+|
++-- output/                     # Generated results
+    |-- figures/                # 216 PNG images (8x3x9)
+    |   |-- gaussian/
+    |   |   |-- fft/
+    |   |   |-- fd_dirichlet/
+    |   |   +-- dct_neumann/
+    |   |-- sphere/
+    |   |-- ellipsoid/
+    |   |-- cone/
+    |   |-- cube/
+    |   |-- saddle/
+    |   |-- peaks/
+    |   +-- sinusoid/
+    +-- solver_comparison_results.json
+\end{lstlisting}
 
-The Python implementation follows a modular architecture organized into the following components. Figure~\ref{fig:python_arch_stub} shows a placeholder diagram.
+\subsection{Core Modules}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=1.5cm, auto,
-    block/.style={rectangle, draw, fill=gray!20, text width=6em, text centered, minimum height=3em},
-    arrow/.style={->, thick}]
-    
-    \node[block] (input) {Input Module};
-    \node[block, right of=input, xshift=2cm] (process) {Processing Module};
-    \node[block, right of=process, xshift=2cm] (output) {Output Module};
-    
-    \draw[arrow] (input) -- (process);
-    \draw[arrow] (process) -- (output);
-    
-    \node[below of=process, yshift=-0.5cm, text=red] {\textbf{[PLACEHOLDER DIAGRAM]}};
-\end{tikzpicture}
-\caption{Python module architecture (STUB --- to be replaced with actual implementation details).}
-\label{fig:python_arch_stub}
-\end{figure}
+\subsubsection{Surface Generation (\texttt{surfaces/})}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+Each surface module exports a function returning the height field and grid:
 
-\subsubsection{MATLAB Implementation Structure}
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small]
+def create_gaussian_surface(nx=256, ny=256):
+    """Returns: X, Y, Z, dx, dy"""
+    # 8 surfaces: gaussian, sphere, ellipsoid, 
+    #             cone, cube, saddle, peaks, sinusoid
+\end{lstlisting}
 
-\textbf{[PLACEHOLDER --- CONTENT TO BE REPLACED]}
+\subsubsection{Photometric Stereo (\texttt{photometric/})}
 
-The MATLAB implementation provides a reference implementation with similar functionality. Figure~\ref{fig:matlab_arch_stub} shows the placeholder architecture.
+The photometric module handles the complete PS pipeline:
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=1.2cm, auto,
-    block/.style={rectangle, draw, fill=gray!20, text width=5em, text centered, minimum height=2.5em},
-    arrow/.style={->, thick}]
-    
-    \node[block] (main) {main.m};
-    \node[block, below left of=main, xshift=-1.5cm] (ps) {ps\_solve.m};
-    \node[block, below of=main] (poisson) {poisson.m};
-    \node[block, below right of=main, xshift=1.5cm] (viz) {visualize.m};
-    
-    \draw[arrow] (main) -- (ps);
-    \draw[arrow] (main) -- (poisson);
-    \draw[arrow] (main) -- (viz);
-    
-    \node[below of=poisson, yshift=-0.3cm, text=red] {\textbf{[PLACEHOLDER DIAGRAM]}};
-\end{tikzpicture}
-\caption{MATLAB function hierarchy (STUB --- to be replaced with actual code structure).}
-\label{fig:matlab_arch_stub}
-\end{figure}
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small]
+lights = make_rotating_lights(32, elevation=45)
+images = render_photometric_images(N_true, lights)
+N_est = photometric_stereo(images, lights)
+p, q = gradients_from_normals(N_est)
+f = compute_divergence(p, q, dx, dy)
+\end{lstlisting}
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.
+\subsubsection{Poisson Solvers (\texttt{solvers/})}
 
-\subsubsection{Code Validation Strategy}
+Three solvers with identical interface:
 
-\textbf{[PLACEHOLDER --- CONTENT TO BE REPLACED]}
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small]
+Z = solve_poisson_fft(f, dx, dy)          # Periodic BC
+Z = solve_poisson_fd_dirichlet(f, dx, dy) # Zero BC
+Z = solve_poisson_dct_neumann(f, dx, dy)  # Zero-flux BC
+\end{lstlisting}
 
-Validation of the implementation involves several strategies shown in Figure~\ref{fig:validation_stub}.
+\subsection{Running Experiments}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=1.8cm, auto,
-    block/.style={rectangle, draw, fill=gray!20, text width=7em, text centered, minimum height=2.5em},
-    arrow/.style={->, thick}]
-    
-    \node[block] (synth) {Synthetic Tests};
-    \node[block, right of=synth, xshift=2.5cm] (unit) {Unit Tests};
-    \node[block, below of=synth] (compare) {Cross-Validation};
-    \node[block, below of=unit] (bench) {Benchmarks};
-    
-    \draw[arrow] (synth) -- (compare);
-    \draw[arrow] (unit) -- (bench);
-    \draw[arrow] (compare) -- (bench);
-    
-    \node[below of=compare, xshift=2cm, yshift=0.3cm, text=red] {\textbf{[PLACEHOLDER DIAGRAM]}};
-\end{tikzpicture}
-\caption{Validation workflow (STUB --- to be replaced with actual testing methodology).}
-\label{fig:validation_stub}
-\end{figure}
+\begin{lstlisting}[language=bash, basicstyle=\ttfamily\small]
+cd python_code
+pip install numpy scipy matplotlib
+python runner.py
+\end{lstlisting}
 
-Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis.
+This generates 216 figures (8 shapes × 3 solvers × 9 figure types) and a JSON results file with all RMSE values.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of Chapter 4: Implementation
+% End of Section 5: Software Architecture
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% CHAPTER 5: EXPERIMENTAL VALIDATION
+% SECTION 6: EXPERIMENTAL VALIDATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \newpage

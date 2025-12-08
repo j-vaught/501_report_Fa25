@@ -7,15 +7,15 @@ Maps to project_restructured.tex experimental parameters.
 import numpy as np
 
 # Grid resolution
-NX = 128
-NY = 128
+NX = 256
+NY = 256
 
 # Domain ranges
 X_RANGE = (-1, 1)
 Y_RANGE = (-1, 1)
 
 # Light configuration (Section 5.2)
-DEFAULT_NUM_LIGHTS = 16
+DEFAULT_NUM_LIGHTS = 32
 LIGHT_ELEVATION_DEG = 45.0
 
 # Gaussian surface parameters (Section 5.1)

@@ -26,7 +26,7 @@ from surfaces import (
 from solvers import (
     solve_poisson_fft,
     solve_poisson_fd_dirichlet,
-    solve_poisson_fd_neumann,
+    solve_poisson_dct_neumann,
 )
 from photometric import (
     make_rotating_lights,
@@ -154,7 +154,7 @@ def run_shape_all_solvers(
     solvers = {
         "fft": solve_poisson_fft,
         "fd_dirichlet": solve_poisson_fd_dirichlet,
-        "fd_neumann": solve_poisson_fd_neumann,
+        "dct_neumann": solve_poisson_dct_neumann,
     }
     
     for solver_name, solver_fn in solvers.items():
@@ -218,17 +218,17 @@ def run_all_shapes_all_solvers(
 def print_results_table(results: Dict[str, Dict[str, Dict[str, float]]]) -> None:
     """Pretty-print results as a table."""
     print("\n" + "="*80)
-    print("SOLVER COMPARISON RESULTS")
+    print("SOLVER COMPARISON RESULTS (256x256, 32 lights)")
     print("="*80)
-    print(f"{'Shape':<12} | {'FFT RMSE':<12} | {'Dirichlet RMSE':<14} | {'Neumann RMSE':<12}")
+    print(f"{'Shape':<12} | {'FFT (Periodic)':<14} | {'FD-Dirichlet':<12} | {'DCT (Neumann)':<13}")
     print("-"*80)
     
     for shape_name, solvers in results.items():
         fft_rmse = solvers.get("fft", {}).get("rmse", float('nan'))
         dir_rmse = solvers.get("fd_dirichlet", {}).get("rmse", float('nan'))
-        neu_rmse = solvers.get("fd_neumann", {}).get("rmse", float('nan'))
+        dct_rmse = solvers.get("dct_neumann", {}).get("rmse", float('nan'))
         
-        print(f"{shape_name:<12} | {fft_rmse:<12.6f} | {dir_rmse:<14.6f} | {neu_rmse:<12.6f}")
+        print(f"{shape_name:<12} | {fft_rmse:<14.6f} | {dir_rmse:<12.6f} | {dct_rmse:<13.6f}")
     
     print("="*80)
 

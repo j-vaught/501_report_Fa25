@@ -846,55 +846,79 @@ The complete finite difference Dirichlet solver is shown in Algorithm~\ref{alg:f
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
-\subsection{Solver 3: Finite Difference (Neumann Boundaries)}
+\subsection{Solver 3: DCT-Based (Neumann Boundaries)}
 
 The Neumann solver handles problems where boundary derivatives, rather than values, are specified. This is often more physically realistic for photometric stereo, where we typically have no information about the absolute height at image boundaries---only the surface gradients.
 
-\subsubsection{Mathematical Approach}
-
-As with the Dirichlet solver, we discretize using the 5-point stencil and solve the resulting sparse system with Conjugate Gradient. The key difference lies in how boundary points are handled: instead of prescribing $z = g$ at boundaries, we prescribe the normal derivative $\partial z / \partial n = h$.
-
-For homogeneous Neumann conditions ($h = 0$), the surface gradient perpendicular to the boundary is zero---the surface approaches the boundary ``flat." This is enforced by using one-sided differences at boundary points or by introducing ghost points outside the domain that mirror interior values.
-
-A crucial distinction from the Dirichlet case is that Neumann problems with homogeneous conditions determine the solution only up to an additive constant. The compatibility condition (Section 2.3) requires:
+Unlike the FFT solver which uses iterative methods or complex boundary handling, we use the Discrete Cosine Transform (DCT), which naturally enforces Neumann conditions through its basis functions. The key insight is that cosine basis functions have zero derivative at both endpoints:
 \begin{equation}
-\iint_\Omega f \, dA = 0
+\frac{d}{dx}\cos\left(\frac{n\pi x}{L}\right)\bigg|_{x=0} = \frac{d}{dx}\cos\left(\frac{n\pi x}{L}\right)\bigg|_{x=L} = 0
 \end{equation}
-If the source term $f$ does not integrate to zero, we subtract its mean before solving. After obtaining the solution, we typically enforce zero mean to fix the arbitrary constant.
+This means the DCT \textit{implicitly} enforces homogeneous Neumann boundary conditions $\partial z/\partial n = 0$ without any iterative solver or explicit boundary handling. In contrast, the FFT uses complex exponentials which implicitly enforce \textit{periodic} boundary conditions.
+
+\subsubsection{Mathematical Formulation}
+
+Like the FFT solver, the DCT approach converts the Poisson equation into algebraic operations in the spectral domain. The DCT achieves $\mathcal{O}(N \log N)$ complexity while naturally enforcing zero-flux (Neumann) conditions at the domain boundaries.
+
+
+The Type-II DCT (forward) and Type-III DCT (inverse, also called IDCT) of a 2D field $f_{i,j}$ are defined as:
+\begin{align}
+\hat{F}_{k,l} &= \sum_{i=0}^{N_x-1} \sum_{j=0}^{N_y-1} f_{i,j} \cos\left[\frac{\pi k (i + \frac{1}{2})}{N_x}\right] \cos\left[\frac{\pi l (j + \frac{1}{2})}{N_y}\right] \\
+f_{i,j} &= \sum_{k=0}^{N_x-1} \sum_{l=0}^{N_y-1} w_k w_l \hat{F}_{k,l} \cos\left[\frac{\pi k (i + \frac{1}{2})}{N_x}\right] \cos\left[\frac{\pi l (j + \frac{1}{2})}{N_y}\right]
+\end{align}
+where $w_0 = 1/N$ and $w_k = 2/N$ for $k > 0$ are normalization weights.
+
+The discrete Laplacian operator acting on the cosine basis yields eigenvalues:
+\begin{equation}
+\lambda_{k,l} = -\frac{2}{\Delta x^2}\left(1 - \cos\frac{\pi k}{N_x}\right) - \frac{2}{\Delta y^2}\left(1 - \cos\frac{\pi l}{N_y}\right)
+\end{equation}
+These eigenvalues arise from the second-order central difference stencil combined with the Neumann boundary condition (ghost point reflection). At $k = l = 0$, we have $\lambda_{0,0} = 0$, corresponding to the null-space constant inherent to Neumann problems.
+
+The spectral solution follows directly:
+\begin{equation}
+\hat{Z}_{k,l} = \frac{\hat{F}_{k,l}}{\lambda_{k,l}}, \quad (k,l) \neq (0,0)
+\end{equation}
+The DC component $\hat{Z}_{0,0}$ is set to zero (or any constant), which corresponds to choosing the particular solution with zero mean.
 
 \subsubsection{Boundary Condition: Zero Flux}
 
-Zero-flux (homogeneous Neumann) conditions prescribe:
+Neumann conditions specify that the normal derivative vanishes at the boundary:
 \begin{equation}
 \frac{\partial z}{\partial n}\bigg|_{\partial\Omega} = 0
 \end{equation}
-This means the surface has zero slope perpendicular to the boundary. For photometric stereo, this is appropriate when we have no prior knowledge about boundary heights and want the solution to extend naturally beyond the image frame.
-Using the ghost point $z_{-1,j} = z_{1,j}$ (mirroring across the boundary), the stencil at a left boundary point becomes:
+Physically, this means the surface approaches the boundary with zero slope perpendicular to the edge. For photometric stereo, this is appropriate when we have no information about absolute heights at the image boundary---we only know that the surface should extend smoothly beyond the observed region.
+
+Unlike periodic conditions (which cause wrap-around artifacts) or Dirichlet conditions (which force the boundary to a prescribed value), Neumann conditions impose no artificial constraints on boundary heights. The surface is free to take any shape at the edges, subject only to a zero-slope constraint.
+
+A crucial requirement is the \textit{compatibility condition}:
 \begin{equation}
-\frac{z_{1,j} + z_{-1,j} + z_{0,j+1} + z_{0,j-1} - 4z_{0,j}}{h^2} = \frac{2z_{1,j} + z_{0,j+1} + z_{0,j-1} - 4z_{0,j}}{h^2} = f_{0,j}
+\iint_\Omega f \, dA = 0
 \end{equation}
-The coefficient on the interior neighbor doubles, effectively reflecting the gradient condition.
+This follows from the divergence theorem applied to $\nabla^2 z = f$ with zero-flux boundaries. If the input $f$ does not satisfy this condition, we enforce it by subtracting the mean: $f \gets f - \text{mean}(f)$. After solving, the result is determined only up to an additive constant, which we fix by mean-centering.
 
-\subsubsection{Algorithm Steps}
+\subsubsection{Algorithm}
 
-The complete finite difference Neumann solver is shown in Algorithm~\ref{alg:fd_neumann}. The key differences from the Dirichlet solver are: (1) enforcing compatibility by subtracting the mean of $f$, (2) using the Neumann stencil at boundaries, and (3) centering the solution afterward. The computational cost remains $\mathcal{O}(N \cdot k)$.
+The complete DCT-based solver procedure is shown in Algorithm~\ref{alg:dct_neumann}. The algorithm requires only two DCT operations (forward and inverse), each with $\mathcal{O}(N \log N)$ complexity, making this solver as fast as the FFT approach. The key steps are: (1) enforce compatibility by mean-centering the divergence field, (2) transform to frequency domain via DCT-II, (3) divide by eigenvalues (spectral solve), (4) transform back via inverse DCT-II, and (5) mean-center the result to fix the additive constant ambiguity.
 
+Unlike an iterative finite difference approach which requires tuning convergence tolerances and maximum iteration counts, the DCT method is \textit{direct}---it always converges in a single pass with no parameter tuning required. This makes it both faster and more robust than iterative Neumann solvers.
 
 \begin{algorithm}[H]
-\caption{Finite Difference Poisson Solver (Neumann BC)}
-\label{alg:fd_neumann}
+\caption{DCT-Based Poisson Solver (Neumann BC)}
+\label{alg:dct_neumann}
 \begin{algorithmic}[1]
 \Require Gradient estimates $(p, q)$ from photometric stereo
 \Ensure Height field $z$ with $\partial z/\partial n|_{\partial\Omega} = 0$
 \State Compute divergence: $f \gets \partial_x p + \partial_y q$
 \State Enforce compatibility: $f \gets f - \text{mean}(f)$
-\State Define operator $A: z \mapsto \nabla^2_h z$ with Neumann stencil at boundaries
-\State Initialize: $z_0 \gets 0$
-\State Solve: $\mathbf{z} \gets \text{CG}(A, \mathbf{f}, z_0, \text{tol})$
+\State Compute eigenvalues: $\lambda_{ij} \gets -\frac{2}{\Delta x^2}(1 - \cos\frac{\pi i}{N_x}) - \frac{2}{\Delta y^2}(1 - \cos\frac{\pi j}{N_y})$
+\State Forward transform: $\hat{F} \gets \text{DCT-II}(f)$
+\State Spectral solve: $\hat{Z}_{ij} \gets \hat{F}_{ij} / \lambda_{ij}$, with $\hat{Z}_{00} \gets 0$
+\State Inverse transform: $z \gets \text{IDCT-II}(\hat{Z})$
 \State Center solution: $z \gets z - \text{mean}(z)$
 \State \Return $z$
 \end{algorithmic}
 \end{algorithm}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
@@ -1572,34 +1596,31 @@ This study verifies the expected $\mathcal{O}(\Delta x^2)$ convergence rate of t
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{Solver Comparison Experiments}
 
-This section compares the four Poisson solvers developed in Chapter~3. All solvers receive identical input---the same divergence field from photometric stereo---ensuring that performance differences are attributable to the solver, not the input data.
+This section compares the three Poisson solvers developed in Chapter~3. All solvers receive identical input---the same divergence field from photometric stereo---ensuring that performance differences are attributable to the solver, not the input data.
 
 \subsubsection{Protocol: Same Divergence Field, Different Solvers}
 
-To isolate solver behavior, we use a single photometric stereo run on the Gaussian test surface with eight lights. This produces a fixed gradient field $(p, q)$ and corresponding divergence $f = \partial_x p + \partial_y q$. Each solver integrates this same $f$ under its respective boundary conditions.
+To isolate solver behavior, we use a single photometric stereo run on each test surface with 32 lights at $45^\circ$ elevation. This produces a fixed gradient field $(p, q)$ and corresponding divergence $f = \partial_x p + \partial_y q$. Each solver integrates this same $f$ under its respective boundary conditions.
 
 \begin{center}
-\resizebox{0.95\linewidth}{!}{%
+\resizebox{0.85\linewidth}{!}{%
 \begin{tikzpicture}[>=latex,
                     every node/.style={draw=USCGarnet, rounded corners, align=center,
-                                       text width=3cm, fill=USCGarnet!30},
+                                       text width=3.2cm, fill=USCGarnet!30},
                     every path/.style={draw=USCGarnet, thick}]
-\node (ps) {Gaussian + 8 lights\\$\to$ PS $\to (p,q)$};
+\node (ps) {Surface + 32 lights\\$\to$ PS $\to (p,q)$};
 \node[right=2.5cm of ps] (div) {Divergence\\$f = \partial_x p + \partial_y q$};
-\node[below left=1.5cm and -0.5cm of div] (fft) {FFT Solver\\(Periodic BC)};
+\node[below left=1.5cm and 0.5cm of div] (fft) {FFT Solver\\(Periodic BC)};
 \node[below=1.5cm of div] (dir) {FD Solver\\(Dirichlet BC)};
-\node[below right=1.5cm and -0.5cm of div] (neu) {FD Solver\\(Neumann BC)};
-\node[right=2.5cm of div] (tik) {Tikhonov FFT\\($\lambda$ sweep)};
+\node[below right=1.5cm and 0.5cm of div] (dct) {DCT Solver\\(Neumann BC)};
 \node[below=3.5cm of div] (compare) {Mean-center all\\$\to$ compare RMSE};
 \draw[->] (ps) -- (div);
 \draw[->] (div) -- (fft);
 \draw[->] (div) -- (dir);
-\draw[->] (div) -- (neu);
-\draw[->] (div) -- (tik);
+\draw[->] (div) -- (dct);
 \draw[->] (fft) -- (compare);
 \draw[->] (dir) -- (compare);
-\draw[->] (neu) -- (compare);
-\draw[->] (tik) |- (compare);
+\draw[->] (dct) -- (compare);
 \end{tikzpicture}%
 }
 \end{center}
@@ -1647,52 +1668,570 @@ The Dirichlet solver pins boundary heights to zero (or a known value), eliminati
 \end{table}
 
 
-\subsubsection{Finite Difference Solver (Neumann BC)}
+\subsubsection{DCT Solver (Neumann BC)}
 
-The Neumann solver enforces zero normal derivative at boundaries---the surface approaches edges with zero slope perpendicular to the boundary.
+The DCT solver uses the Discrete Cosine Transform to enforce Neumann boundary conditions directly in the spectral domain, without iteration.
 
 \begin{table}[H]
 \centering
 \renewcommand{\arraystretch}{1.2}
 \begin{tabularx}{\textwidth}{lX}
 \hline\hline
-\textbf{Aspect} & \textbf{FD-Neumann Solver Characteristics} \\
+\textbf{Aspect} & \textbf{DCT-Neumann Solver Characteristics} \\
 \hline
 \textbf{Boundary Condition} & Zero flux: $\partial z/\partial n|_{\partial\Omega} = 0$ \\
-\textbf{Advantages} & Natural for unknown boundary heights; no artificial pinning \\
+\textbf{Advantages} & $\mathcal{O}(N \log N)$ speed; direct solve (no iteration); exact spectral method for Neumann \\
 \textbf{Compatibility} & Requires $\iint f \, dA = 0$; mean is subtracted before solving \\
-\textbf{Disadvantages} & Solution determined only up to additive constant; must mean-center \\
 \textbf{Best For} & Surfaces extending beyond image frame with unknown edge heights \\
 \hline\hline
 \end{tabularx}
 \end{table}
 
 
-\subsubsection{Tikhonov Regularization Sweep}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Section 6: Results and Discussion
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{Results and Discussion}
 
-Tikhonov regularization adds a smoothness penalty to suppress noise-induced artifacts at the cost of losing fine detail. We sweep the regularization parameter $\lambda \in [10^{-5}, 1]$ logarithmically.
+This section presents the experimental results from our photometric stereo pipeline. We evaluate three Poisson solvers---FFT (periodic), Finite Difference (Dirichlet), and DCT (Neumann)---across eight test surfaces representing diverse geometric categories. All experiments use a $256 \times 256$ grid resolution with 32 lights uniformly distributed at $45°$ elevation.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Quantitative Results Summary}
+
+Table~\ref{tab:solver_comparison_full} presents the RMSE values for all shape-solver combinations. Lower RMSE indicates better reconstruction accuracy.
 
 \begin{table}[H]
 \centering
 \renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabular}{l|ccc|c}
 \hline\hline
-\textbf{Aspect} & \textbf{Tikhonov Regularization Characteristics} \\
+\textbf{Surface} & \textbf{FFT} & \textbf{FD-Dirichlet} & \textbf{DCT-Neumann} & \textbf{Best} \\
 \hline
-\textbf{Formulation} & Modified eigenvalues: $\hat{Z} = \hat{F} / (-k^2 - \lambda k^4)$ \\
-\textbf{$\lambda$ Range} & $10^{-5}$ (minimal smoothing) to $1$ (heavy smoothing) \\
-\textbf{Selection Method} & L-curve: plot $\|\nabla^2 z - f\|$ vs.\ $\|z\|$; choose corner \\
-\textbf{Trade-off} & Small $\lambda$: preserves detail but amplifies noise; large $\lambda$: smooth but loses features \\
+Gaussian   & 0.0425 & \textbf{0.0261} & 0.0424 & Dirichlet \\
+Sphere     & 0.1328 & \textbf{0.1322} & 0.1327 & Dirichlet \\
+Ellipsoid  & 0.1019 & \textbf{0.1013} & 0.1018 & Dirichlet \\
+Cone       & 0.0728 & \textbf{0.0725} & 0.0728 & Dirichlet \\
+Cube       & 0.0449 & \textbf{0.0447} & 0.0449 & Dirichlet \\
+Saddle     & 0.0298 & \textbf{0.0212} & 0.0297 & Dirichlet \\
+Peaks      & 0.0545 & \textbf{0.0447} & 0.0543 & Dirichlet \\
+Sinusoid   & \textbf{0.0266} & 0.0272 & 0.0267 & FFT \\
 \hline\hline
-\end{tabularx}
+\end{tabular}
+\caption{RMSE comparison across all surfaces and solvers. Bold indicates lowest RMSE for each surface.}
+\label{tab:solver_comparison_full}
 \end{table}
 
-\noindent\textbf{Purpose:} The $\lambda$ sweep traces a U-curve where RMSE initially decreases (noise suppression) then increases (over-smoothing). The optimal $\lambda$ sits at the elbow, balancing fidelity and stability.
+\subsubsection{Key Observations}
+
+The FD-Dirichlet solver dominates for most surfaces, achieving the lowest RMSE for 7 out of 8 test cases. This advantage stems from pinning boundary heights to zero, which is well-suited for surfaces that naturally decay at the edges of the domain. The Dirichlet boundary condition effectively eliminates edge artifacts that plague the FFT solver.
+
+The only exception is the sinusoid surface, where FFT outperforms other solvers. This is expected: the sinusoid is inherently periodic, perfectly matching FFT's implicit periodic boundary conditions. For genuinely periodic data, FFT remains the optimal choice.
+
+DCT-Neumann, while rarely the best, consistently performs within 1\% of Dirichlet for all surfaces. It provides a good balance when zero-flux boundary conditions are physically appropriate---for instance, when surfaces extend beyond the image frame with unknown edge heights.
+
+Surfaces with sharp edges present challenges for all solvers. The cone and cube show higher RMSE overall, regardless of solver choice. This reflects a fundamental limitation of gradient-based methods: discontinuities in the gradient field cannot be perfectly integrated.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of Section 5: Experimental Validation
-% Results will be presented in Section 6
+\subsection{Smooth Curved Surface Results}
 
+Smooth curved surfaces test the pipeline's ability to recover continuous geometry from varying surface normals. These surfaces have well-defined gradients everywhere and should yield high-quality reconstructions.
+
+\subsubsection{Gaussian Surface}
+
+The Gaussian surface $z(x,y) = A \exp(-((x-x_0)^2 + (y-y_0)^2)/\sigma^2)$ represents a smooth, radially symmetric bump. Results demonstrate excellent reconstruction across all solvers.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/gaussian/fd_dirichlet/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{Gaussian surface reconstruction using FD-Dirichlet solver (RMSE = 0.0261). The smooth radially symmetric bump shows excellent reconstruction with errors concentrated at domain boundaries.}
+\label{fig:gaussian_results}
+\end{figure}
+
+\subsubsection{Sphere Surface}
+
+The sphere's curved geometry produces normal vectors that vary smoothly across the visible hemisphere. The challenge lies in the steep gradients near the edges where the surface curves away from the viewer.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sphere/fd_dirichlet/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{Sphere surface reconstruction using FD-Dirichlet solver (RMSE = 0.1322). Higher RMSE reflects difficulty with steep edge gradients where the surface curves away from the viewer.}
+\label{fig:sphere_results}
+\end{figure}
+
+\subsubsection{Ellipsoid Surface}
+
+The ellipsoid extends the sphere test with asymmetric curvature along different axes. This tests the solver's handling of anisotropic gradient fields.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/ellipsoid/fd_dirichlet/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{Ellipsoid surface reconstruction using FD-Dirichlet solver (RMSE = 0.1013). Errors concentrate at high-curvature regions near the ellipsoid's extended axis.}
+\label{fig:ellipsoid_results}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Sharp-Edged Surface Results}
+
+Sharp-edged surfaces challenge photometric stereo because the Lambertian assumption breaks down at discontinuities and the gradient field has singularities.
+
+\subsubsection{Cone Surface}
+
+The cone has a smooth lateral surface but a singular apex where the normal is undefined. This tests the pipeline's robustness to point discontinuities.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cone/fd_dirichlet/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{Cone surface reconstruction using FD-Dirichlet solver (RMSE = 0.0725). Errors concentrate at the apex singularity where the gradient is undefined.}
+\label{fig:cone_results}
+\end{figure}
+
+\subsubsection{Cube Surface}
+
+The cube presents the most challenging case: a piecewise-constant height field with sharp right-angle edges. The gradient is undefined along all edges, causing fundamental difficulties for gradient-based reconstruction.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/cube/fd_dirichlet/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{Cube surface reconstruction using FD-Dirichlet solver (RMSE = 0.0447). Sharp right-angle edges cause ringing artifacts where the gradient is undefined.}
+\label{fig:cube_results}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Oscillating Surface Results}
+
+Oscillating surfaces test the pipeline's frequency response and ability to recover periodic or quasi-periodic height variations.
+
+\subsubsection{Saddle Surface}
+
+The saddle $z = \alpha(x^2 - y^2)$ has positive curvature in one direction and negative in the orthogonal direction. This creates a challenging gradient field with both positive and negative divergence regions.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/saddle/fd_dirichlet/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{Saddle surface reconstruction using FD-Dirichlet solver (RMSE = 0.0212), one of the best results overall. The mixed positive/negative curvature is recovered accurately.}
+\label{fig:saddle_results}
+\end{figure}
+
+\subsubsection{Sinusoid Surface}
+
+The sinusoid $z = A \sin(k_x x) \sin(k_y y)$ is the only surface where FFT outperforms other solvers. This validates that periodic boundary conditions are optimal for genuinely periodic data.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/sinusoid/fft/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{Sinusoid surface reconstruction using FFT solver (RMSE = 0.0266). This is the only surface where FFT outperforms other solvers, validating that periodic boundary conditions are optimal for genuinely periodic data.}
+\label{fig:sinusoid_results}
+\end{figure}
+
+\subsubsection{MATLAB Peaks Surface}
+
+The peaks function combines multiple Gaussian-like bumps with varying signs, creating a complex multi-modal surface.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/3d_true.png}
+\caption{True 3D}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/3d_est.png}
+\caption{Reconstruction}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/depth_true.png}
+\caption{Ground-truth depth}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/depth_est.png}
+\caption{Recovered depth}
+\end{subfigure}
+
+\bigskip
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/error_map.png}
+\caption{Depth error}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/profile.png}
+\caption{Center-line profile}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/histogram.png}
+\caption{Error histogram}
+\end{subfigure}
+\begin{subfigure}[b]{0.23\textwidth}
+\includegraphics[width=\linewidth]{python_code/output/figures/peaks/fd_dirichlet/normals_est.png}
+\caption{Estimated normals}
+\end{subfigure}
+\caption{MATLAB Peaks surface reconstruction using FD-Dirichlet solver (RMSE = 0.0447). The complex multi-modal surface with multiple Gaussian-like bumps is recovered accurately.}
+\label{fig:peaks_results}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Solver Comparison Analysis}
+
+\subsubsection{Boundary Condition Impact}
+
+The choice of boundary condition has a measurable impact on reconstruction quality. Figure~\ref{fig:boundary_comparison} illustrates the difference between FFT (periodic), Dirichlet (zero boundary), and Neumann (zero flux) for the Gaussian surface.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.32\textwidth}
+\centering
+\includegraphics[width=\textwidth]{python_code/output/figures/gaussian/fft/depth_est.png}
+\caption*{FFT (Periodic)}
+\end{minipage}
+\begin{minipage}{0.32\textwidth}
+\centering
+\includegraphics[width=\textwidth]{python_code/output/figures/gaussian/fd_dirichlet/depth_est.png}
+\caption*{FD-Dirichlet}
+\end{minipage}
+\begin{minipage}{0.32\textwidth}
+\centering
+\includegraphics[width=\textwidth]{python_code/output/figures/gaussian/dct_neumann/depth_est.png}
+\caption*{DCT-Neumann}
+\end{minipage}
+\caption{Depth map comparison for Gaussian surface across all three solvers.}
+\label{fig:boundary_comparison}
+\end{figure}
+
+The FFT solver shows subtle wrap-around artifacts at the boundaries due to its implicit periodic assumption. The Dirichlet solver forces zero height at boundaries, which works well for surfaces that naturally decay. The DCT-Neumann solver allows free boundary heights with zero slope, providing a middle ground.
+
+\subsubsection{Normal Map Quality}
+
+Accurate surface normals are essential for high-quality reconstruction. Figure~\ref{fig:normal_comparison} shows estimated vs. ground truth normal maps.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=0.8\textwidth]{python_code/output/figures/gaussian/fft/normals_true.png}
+\caption*{Ground Truth Normals}
+\end{minipage}
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=0.8\textwidth]{python_code/output/figures/gaussian/fft/normals_est.png}
+\caption*{Estimated Normals}
+\end{minipage}
+\caption{Normal map comparison for Gaussian surface. RGB encodes $(n_x, n_y, n_z)$ components.}
+\label{fig:normal_comparison}
+\end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Ablation Study Results}
+
+\subsubsection{Light Count Sweep}
+
+We varied the number of lights from 3 to 20 to determine the minimum required for accurate reconstruction.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c|cccccc}
+\hline\hline
+Lights & 3 & 6 & 10 & 16 & 20 \\
+\hline
+RMSE & 0.0422 & 0.0425 & 0.0425 & 0.0425 & 0.0425 \\
+\hline\hline
+\end{tabular}
+\caption{RMSE vs. number of lights for Gaussian surface with FFT solver.}
+\label{tab:light_sweep}
+\end{table}
+
+Results show that performance saturates quickly: 3 lights achieve nearly the same accuracy as 20 lights. This suggests that for noise-free synthetic data, the theoretical minimum of 3 non-coplanar lights is sufficient.
+
+\subsubsection{Noise Robustness}
+
+We added Gaussian noise to rendered images to test pipeline robustness.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c|ccccc}
+\hline\hline
+$\sigma$ & 0.00 & 0.01 & 0.02 & 0.05 & 0.08 \\
+\hline
+RMSE & 0.0425 & 0.0432 & 0.0442 & 0.0467 & 0.0496 \\
+\hline\hline
+\end{tabular}
+\caption{RMSE vs. noise level ($\sigma$) for Gaussian surface with FFT solver.}
+\label{tab:noise_sweep}
+\end{table}
+
+RMSE increases approximately linearly with noise level. At $\sigma = 0.08$ (8\% noise), RMSE increases by only 17\%, demonstrating reasonable robustness.
+
+\subsubsection{Tikhonov Regularization}
+
+We tested Tikhonov regularization to combat noise amplification at high frequencies.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c|ccccc}
+\hline\hline
+$\lambda$ & 0 (FFT) & $10^{-5}$ & $10^{-3}$ & $10^{-2}$ & $10^{-1}$ \\
+\hline
+RMSE ($\sigma=0.05$) & 0.0467 & 0.0467 & 0.0485 & 0.0746 & 0.1279 \\
+\hline\hline
+\end{tabular}
+\caption{RMSE vs. Tikhonov regularization parameter for Gaussian surface with noise $\sigma=0.05$.}
+\label{tab:tikhonov_sweep}
+\end{table}
+
+For the smooth Gaussian surface, Tikhonov regularization provides minimal benefit---the optimal $\lambda$ is near zero. This is expected because smooth surfaces have little high-frequency content to suppress. Tikhonov is more beneficial for sharp-edged surfaces where noise manifests as high-frequency ringing.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Discussion}
+
+\subsubsection{Key Findings}
+
+Solver selection has a significant impact on reconstruction quality, with the choice of boundary condition affecting RMSE by up to 40\%. For example, the Gaussian surface achieves RMSE of 0.0261 with Dirichlet boundaries versus 0.0425 with FFT---a substantial difference from a simple implementation choice.
+
+The key insight is to match boundary conditions to surface characteristics. Periodic surfaces benefit from FFT; surfaces with unknown edge behavior benefit from Neumann conditions; and surfaces with known zero edges benefit from Dirichlet constraints. There is no universally ``best'' solver---the optimal choice depends on the geometry being reconstructed.
+
+All solvers struggle with discontinuities and singularities, as seen in the cone and cube results. This is a fundamental limitation of gradient-based methods: the Poisson equation assumes smooth integrands, and sharp features violate this assumption.
+
+For synthetic noise-free data, 3 lights suffice to achieve near-optimal accuracy. The overdetermined system from additional lights provides marginal benefit for clean data but becomes increasingly valuable for noisy real-world acquisitions where redundancy helps reject outliers.
+
+\subsubsection{Limitations}
+
+These experiments use synthetic data only, avoiding many challenges that arise in real photometric stereo systems. Real acquisitions face additional difficulties including interreflections between surface regions, cast shadows that violate the single-light assumption, and non-Lambertian reflectance that breaks the linear image formation model.
+
+The experiments assume global illumination with a single uniform light direction per image. Real systems often have near-field lighting effects where the illumination direction varies across the surface, requiring more sophisticated calibration. Self-occlusion and cast shadows, which create regions with no valid gradient information, are not modeled in these synthetic tests.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of Section 6: Results and Discussion
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \end{document}

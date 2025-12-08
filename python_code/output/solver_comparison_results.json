@@ -2,136 +2,136 @@
   "gaussian": {
     "fft": {
       "rmse": 0.04246938273928308,
-      "time_ms": 1.0979175567626953,
+      "time_ms": 0.7739067077636719,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 0.02611203949121778,
-      "time_ms": 23.19169044494629,
+      "time_ms": 22.747278213500977,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 702.6431085687766,
-      "time_ms": 213.15479278564453,
+    "dct_neumann": {
+      "rmse": 0.04242945349300934,
+      "time_ms": 1.0900497436523438,
       "success": true
     }
   },
   "sphere": {
     "fft": {
       "rmse": 0.13280467376627322,
-      "time_ms": 0.33092498779296875,
+      "time_ms": 0.3352165222167969,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 0.13221833230212215,
-      "time_ms": 21.934986114501953,
+      "time_ms": 21.867036819458008,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 0.1327474006115898,
-      "time_ms": 45.3948974609375,
+    "dct_neumann": {
+      "rmse": 0.13273100781401262,
+      "time_ms": 0.2930164337158203,
       "success": true
     }
   },
   "cube": {
     "fft": {
       "rmse": 0.14703351634394485,
-      "time_ms": 0.33092498779296875,
+      "time_ms": 0.3368854522705078,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 0.14697529760506056,
-      "time_ms": 20.673036575317383,
+      "time_ms": 20.780086517333984,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 0.14697167598369912,
-      "time_ms": 53.86996269226074,
+    "dct_neumann": {
+      "rmse": 0.14697178682255815,
+      "time_ms": 0.27680397033691406,
       "success": true
     }
   },
   "ellipsoid": {
     "fft": {
       "rmse": 0.053850074564842906,
-      "time_ms": 0.3447532653808594,
+      "time_ms": 0.3380775451660156,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 0.05338005761993091,
-      "time_ms": 21.738052368164062,
+      "time_ms": 21.88897132873535,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 0.05380413809953417,
-      "time_ms": 45.803070068359375,
+    "dct_neumann": {
+      "rmse": 0.0537948281386145,
+      "time_ms": 0.2849102020263672,
       "success": true
     }
   },
   "cone": {
     "fft": {
       "rmse": 0.0004396870108824126,
-      "time_ms": 0.35309791564941406,
+      "time_ms": 0.32806396484375,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 0.00034961833842938277,
-      "time_ms": 22.423267364501953,
+      "time_ms": 21.802902221679688,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 0.00035177985095643176,
-      "time_ms": 45.11594772338867,
+    "dct_neumann": {
+      "rmse": 0.000351635755701021,
+      "time_ms": 0.2779960632324219,
       "success": true
     }
   },
   "saddle": {
     "fft": {
       "rmse": 0.1015748031496063,
-      "time_ms": 0.34689903259277344,
+      "time_ms": 0.33211708068847656,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 0.1015748031496063,
-      "time_ms": 30.577898025512695,
+      "time_ms": 31.555891036987305,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 0.1022358562280155,
-      "time_ms": 217.41986274719238,
+    "dct_neumann": {
+      "rmse": 0.1015748031496065,
+      "time_ms": 0.2942085266113281,
       "success": true
     }
   },
   "peaks": {
     "fft": {
       "rmse": 1.3493064390569416,
-      "time_ms": 0.3371238708496094,
+      "time_ms": 0.3387928009033203,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 1.3456613058993239,
-      "time_ms": 34.1799259185791,
+      "time_ms": 34.36899185180664,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 10.57213659421779,
-      "time_ms": 210.36696434020996,
+    "dct_neumann": {
+      "rmse": 1.23270252400161,
+      "time_ms": 0.2880096435546875,
       "success": true
     }
   },
   "sinusoid": {
     "fft": {
       "rmse": 0.00327425573013967,
-      "time_ms": 0.3490447998046875,
+      "time_ms": 0.33783912658691406,
       "success": true
     },
     "fd_dirichlet": {
       "rmse": 0.006543472619028181,
-      "time_ms": 14.453887939453125,
+      "time_ms": 15.383720397949219,
       "success": true
     },
-    "fd_neumann": {
-      "rmse": 0.33020076012546196,
-      "time_ms": 298.91300201416016,
+    "dct_neumann": {
+      "rmse": 0.3245122976556472,
+      "time_ms": 0.2827644348144531,
       "success": true
     }
   }
